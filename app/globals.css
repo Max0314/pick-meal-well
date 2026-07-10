@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+:root {
+  --cream: #f4ead5;
+  --cream-raised: #fff8e9;
+  --olive: #35431f;
+  --olive-soft: #6c7457;
+  --orange: #e6782e;
+  --tomato: #c94d33;
+  --line: #cfc4a9;
+  --shadow: 0 18px 50px rgb(53 67 31 / 16%);
+  --radius-asymmetric: 6px 30px 6px 30px;
+  --font-ui: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --font-editorial: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: #e5dcc8;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--cream);
+  color: var(--olive);
+  font-family: var(--font-ui);
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 3px solid var(--orange);
+  outline-offset: 3px;
+}
+
+.app-shell {
+  width: min(100%, 430px);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 24px 18px 110px;
+  overflow-x: clip;
+  background: var(--cream);
+  box-shadow: var(--shadow);
+}
+
+.brand {
+  display: inline-block;
+  margin: 0;
+  padding-bottom: 4px;
+  border-bottom: 3px solid var(--orange);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.shell-kicker {
+  margin: 64px 0 7px;
+  color: var(--tomato);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+.shell-title {
+  max-width: 320px;
+  margin: 0;
+  font-family: var(--font-editorial);
+  font-size: clamp(34px, 10vw, 46px);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+.shell-copy {
+  max-width: 310px;
+  margin: 18px 0 0;
+  color: var(--olive-soft);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+@media (min-width: 431px) {
+  body {
+    padding-block: 24px;
+  }
+
+  .app-shell {
+    min-height: calc(100vh - 48px);
+    border-radius: 8px 38px 8px 38px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
