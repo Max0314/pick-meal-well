@@ -12,6 +12,7 @@ test("derives and verifies a passcode without storing plaintext", async () => {
   const salt = createSalt();
   const digest = await derivePasscode("family-meal-2026", salt);
   assert.notEqual(digest, "family-meal-2026");
+  assert.match(digest, /^pbkdf2-sha256\$20000\$[A-Za-z0-9_-]+$/u);
   assert.equal(await verifyPasscode("family-meal-2026", salt, digest), true);
   assert.equal(await verifyPasscode("wrong-passcode", salt, digest), false);
 });

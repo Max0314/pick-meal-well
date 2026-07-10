@@ -1,4 +1,6 @@
-const ITERATIONS = 210_000;
+const LEGACY_ITERATIONS = 210_000;
+const ITERATIONS = 20_000;
+const DIGEST_SCHEME = "pbkdf2-sha256";
 const encoder = new TextEncoder();
 
 function encodeBase64Url(bytes: Uint8Array): string {
@@ -26,7 +28,7 @@ export function validatePasscode(passcode: string): string | null {
   return passcode.trim().length >= 8 ? null : "家庭口令至少需要 8 个字符";
 }
 
-export async function derivePasscode(passcode: string, salt: string): Promise<string> {
+async function derivePasscodeBytes(passcode: string, salt: string, iterations: number): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey(
     "raw",
     encoder.encode(passcode),
@@ -35,11 +37,16 @@ export async function derivePasscode(passcode: string, salt: string): Promise<st
     ["deriveBits"],
   );
   const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt: decodeBase64Url(salt), iterations: ITERATIONS },
+    { name: "PBKDF2", hash: "SHA-256", salt: decodeBase64Url(salt), iterations },
     key,
     256,
   );
-  return encodeBase64Url(new Uint8Array(bits));
+  return new Uint8Array(bits);
+}
+
+export async function derivePasscode(passcode: string, salt: string): Promise<string> {
+  const digest = encodeBase64Url(await derivePasscodeBytes(passcode, salt, ITERATIONS));
+  return `${DIGEST_SCHEME}$${ITERATIONS}$${digest}`;
 }
 
 function timingSafeEqual(left: Uint8Array, right: Uint8Array): boolean {
@@ -56,8 +63,12 @@ export async function verifyPasscode(
   salt: string,
   expectedDigest: string,
 ): Promise<boolean> {
-  const actual = decodeBase64Url(await derivePasscode(passcode, salt));
-  const expected = decodeBase64Url(expectedDigest);
+  const [scheme, encodedIterations, encodedDigest] = expectedDigest.split("$");
+  const versioned = scheme === DIGEST_SCHEME && Boolean(encodedIterations) && Boolean(encodedDigest);
+  const iterations = versioned ? Number(encodedIterations) : LEGACY_ITERATIONS;
+  if (!Number.isSafeInteger(iterations) || iterations < 1 || iterations > LEGACY_ITERATIONS) return false;
+  const actual = await derivePasscodeBytes(passcode, salt, iterations);
+  const expected = decodeBase64Url(versioned ? encodedDigest : expectedDigest);
   return timingSafeEqual(actual, expected);
 }
 

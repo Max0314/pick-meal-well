@@ -8,8 +8,23 @@ export type BootstrapResponse = {
 };
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) {
+  status: number;
+
+  constructor(message: string, status: number) {
     super(message);
+    this.status = status;
+  }
+}
+
+export async function readJsonResponse<T>(response: Response): Promise<T & { error?: string }> {
+  const body = await response.text();
+  if (!body.trim()) {
+    throw new ApiError("服务暂时没有返回内容，请稍后重试", response.status || 503);
+  }
+  try {
+    return JSON.parse(body) as T & { error?: string };
+  } catch {
+    throw new ApiError("服务返回了无法识别的内容，请稍后重试", response.status || 502);
   }
 }
 
@@ -18,7 +33,7 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { "content-type": "application/json", ...init?.headers },
   });
-  const data = await response.json() as T & { error?: string };
+  const data = await readJsonResponse<T>(response);
   if (!response.ok) throw new ApiError(data.error ?? "请求失败，请稍后重试", response.status);
   return data;
 }
