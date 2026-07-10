@@ -16,6 +16,14 @@ import {
   type BootstrapResponse,
 } from "./lib/client-api";
 import type { Dish, HouseholdSettings, KitchenSnapshot, MealType, Recommendation } from "./lib/domain";
+import {
+  enqueueMutation,
+  flushMutationQueue,
+  loadCachedSnapshot,
+  loadQueuedMutations,
+  RetryableSyncError,
+  saveCachedSnapshot,
+} from "./lib/offline-store";
 import type { InventoryInput, KitchenMutation, ShoppingInput } from "./lib/server/repository";
 
 type Tab = "home" | "fridge" | "recipes" | "shopping" | "profile";
@@ -65,6 +73,8 @@ export function KitchenApp() {
   const [accepted, setAccepted] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
+  const [pendingCount, setPendingCount] = useState(0);
 
   async function refreshBootstrap() {
     const next = await getBootstrap();
@@ -84,8 +94,50 @@ export function KitchenApp() {
           setTaste(next.snapshot.household.defaultTaste);
         }
       })
-      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "连接失败"); });
+      .catch(async (reason) => {
+        const cached = await loadCachedSnapshot();
+        if (!active) return;
+        if (cached) {
+          setBootstrap({ claimed: true, authenticated: true, snapshot: cached });
+          setSnapshot(cached); setOnline(false); setNotice("离线 · 显示最近数据");
+        } else {
+          setError(reason instanceof Error ? reason.message : "连接失败");
+        }
+      });
     return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (snapshot) saveCachedSnapshot(snapshot).catch(() => undefined);
+  }, [snapshot]);
+
+  useEffect(() => {
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    const sync = async () => {
+      setOnline(true);
+      try {
+        const result = await flushMutationQueue(async (mutation) => {
+          try {
+            const response = await sendMutation(mutation);
+            setSnapshot(response.snapshot);
+            return response;
+          } catch (reason) {
+            if (reason instanceof TypeError) throw new RetryableSyncError();
+            throw reason;
+          }
+        });
+        setPendingCount(result.remaining.length);
+        if (result.syncedCount) setNotice(`已同步 ${result.syncedCount} 项离线修改。`);
+      } catch (reason) {
+        if (reason instanceof RetryableSyncError) setOnline(false);
+        else setError(reason instanceof Error ? reason.message : "同步失败");
+      }
+    };
+    const offline = () => setOnline(false);
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", offline);
+    loadQueuedMutations().then((queue) => { setPendingCount(queue.length); if (navigator.onLine && queue.length) sync(); });
+    return () => { window.removeEventListener("online", sync); window.removeEventListener("offline", offline); };
   }, []);
 
   useEffect(() => {
@@ -100,9 +152,18 @@ export function KitchenApp() {
 
   async function mutate(mutation: KitchenMutation): Promise<KitchenSnapshot> {
     setError("");
-    const result = await sendMutation(mutation);
-    setSnapshot(result.snapshot);
-    return result.snapshot;
+    try {
+      const result = await sendMutation(mutation);
+      setSnapshot(result.snapshot);
+      return result.snapshot;
+    } catch (reason) {
+      if (!navigator.onLine || reason instanceof TypeError) {
+        await enqueueMutation(mutation);
+        setOnline(false); setPendingCount((count) => count + 1); setNotice("离线修改已保存，联网后会自动同步。");
+        if (snapshot) return snapshot;
+      }
+      throw reason;
+    }
   }
 
   async function acceptRecommendation() {
@@ -140,5 +201,6 @@ export function KitchenApp() {
   if (!bootstrap) return <>{error ? <div className="global-error">{error}</div> : null}<LoadingScreen /></>;
   if (!bootstrap.authenticated || !snapshot) return <AuthGate claimed={bootstrap.claimed} onSuccess={refreshBootstrap} />;
 
-  return <main className="app-shell kitchen-shell"><header className="app-topbar"><div><p className="brand">好好吃饭</p><span>{new Date().toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "short" })}</span></div><span className="cloud-status">家庭已同步</span></header>{error ? <div className="global-error" role="alert">{error}</div> : null}{notice ? <button className="notice" onClick={() => setNotice("")}>{notice}</button> : null}{renderContent()}<nav className="bottom-nav" aria-label="主要导航">{tabs.map((item) => <button aria-current={tab === item.id ? "page" : undefined} key={item.id} onClick={() => { setTab(item.id); setNotice(""); }}><span>{item.icon}</span>{item.label}</button>)}</nav></main>;
+  const syncLabel = !online ? "离线 · 显示最近数据" : pendingCount ? `正在同步 ${pendingCount} 项` : "家庭已同步";
+  return <main className="app-shell kitchen-shell"><header className="app-topbar"><div><p className="brand">好好吃饭</p><span>{new Date().toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "short" })}</span></div><span className="cloud-status">{syncLabel}</span></header>{error ? <div className="global-error" role="alert">{error}</div> : null}{notice ? <button className="notice" onClick={() => setNotice("")}>{notice}</button> : null}{renderContent()}<nav className="bottom-nav" aria-label="主要导航">{tabs.map((item) => <button aria-current={tab === item.id ? "page" : undefined} key={item.id} onClick={() => { setTab(item.id); setNotice(""); }}><span>{item.icon}</span>{item.label}</button>)}</nav></main>;
 }

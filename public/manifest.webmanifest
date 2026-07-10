@@ -1,0 +1,11 @@
+{
+  "name": "好好吃饭",
+  "short_name": "好好吃饭",
+  "description": "家庭下一顿决策助手",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4ead5",
+  "theme_color": "#35431f"
+}

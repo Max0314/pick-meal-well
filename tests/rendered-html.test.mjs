@@ -29,6 +29,8 @@ test("ships the approved 好好吃饭 application copy", async () => {
     "菜谱",
     "采购",
     "我的",
+    "离线 · 显示最近数据",
+    "正在同步",
   ]) {
     assert.match(html, new RegExp(copy));
   }
