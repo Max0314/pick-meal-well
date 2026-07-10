@@ -112,7 +112,9 @@ export function KitchenApp() {
   }, [snapshot]);
 
   useEffect(() => {
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    }
     const sync = async () => {
       setOnline(true);
       try {
@@ -141,14 +143,14 @@ export function KitchenApp() {
   }, []);
 
   useEffect(() => {
-    if (!snapshot || tab !== "home") return;
+    if (!snapshot || tab !== "home" || !refreshingRecommendation) return;
     let active = true;
     getRecommendation({ mealType, maxMinutes, taste, excludedDishIds })
       .then((result) => { if (active) { setRecommendation(result.recommendation); setRefreshingRecommendation(false); } })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "推荐失败"); })
       .finally(() => { if (active) setRefreshingRecommendation(false); });
     return () => { active = false; };
-  }, [snapshot, mealType, maxMinutes, taste, excludedDishIds, tab]);
+  }, [snapshot, mealType, maxMinutes, taste, excludedDishIds, tab, refreshingRecommendation]);
 
   async function mutate(mutation: KitchenMutation): Promise<KitchenSnapshot> {
     setError("");
@@ -174,7 +176,7 @@ export function KitchenApp() {
       for (const ingredient of recommendation.missingIngredients) {
         await mutate({ id: crypto.randomUUID(), type: "shopping.add", payload: { id: crypto.randomUUID(), ingredientId: ingredient.ingredientId, amount: ingredient.amount, unit: ingredient.unit, source: "dish" } });
       }
-      setAccepted(true); setNotice(recommendation.missingIngredients.length ? "已经决定，并把缺少食材加入采购。" : "已经决定，今晚可以直接开火。" );
+      setAccepted(true); setNotice(recommendation.missingIngredients.length ? "已经决定，并把缺少食材加入采购。" : "已经决定，这顿可以直接开火。" );
     } catch (reason) { setError(reason instanceof Error ? reason.message : "保存失败"); }
     finally { setBusy(false); }
   }

@@ -56,7 +56,7 @@ export function DecisionHome(props: Props) {
             <h2>{dish.name}</h2>
             <div className="recommendation-metrics"><span>{dish.cookingTime} 分钟</span><span>约 ¥{dish.estimatedCost.toFixed(1)}</span><span>{props.recommendation.missingIngredients.length ? `缺 ${props.recommendation.missingIngredients.length} 样` : "无需采购"}</span></div>
             <p>{props.recommendation.reason}</p>
-            {props.accepted ? <div className="accepted-state">今晚计划已定，开火吧。</div> : <button className="primary-action" disabled={props.busy} onClick={props.onAccept}>就吃这个</button>}
+            {props.accepted ? <div className="accepted-state">这顿计划已定，开火吧。</div> : <button className="primary-action" disabled={props.busy} onClick={props.onAccept}>就吃这个</button>}
             <div className="secondary-actions"><button disabled={props.busy} onClick={props.onSwap}>换一个</button><button disabled={props.busy} onClick={props.onDislike}>不想吃这类</button></div>
           </>
         ) : (

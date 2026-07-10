@@ -36,6 +36,11 @@ test("ships the approved 好好吃饭 application copy", async () => {
   }
   assert.doesNotMatch(html, developmentPreviewMeta);
   assert.doesNotMatch(html, /react-loading-skeleton/);
+  assert.match(kitchenApp, /process\.env\.NODE_ENV === "production"/);
+  assert.match(kitchenApp, /tab !== "home" \|\| !refreshingRecommendation/);
+  assert.match(layout, /generateMetadata/);
+  assert.match(layout, /\/og\.png/);
+  assert.match(layout, /summary_large_image/);
 });
 
 test("removes every disposable starter artifact", async () => {
@@ -47,7 +52,7 @@ test("removes every disposable starter artifact", async () => {
 
   assert.match(page, /<KitchenApp \/>/);
   assert.match(layout, /lang="zh-CN"/);
-  assert.match(layout, /title:\s*"好好吃饭 · 下一顿吃什么"/);
+  assert.match(layout, /const title = "好好吃饭 · 下一顿吃什么"/);
   assert.doesNotMatch(page, /codex-preview|_sites-preview|SkeletonPreview/);
   assert.doesNotMatch(layout, /Starter Project|favicon\.svg/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
