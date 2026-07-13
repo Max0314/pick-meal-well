@@ -10,8 +10,10 @@
     "build": "vinext build",
     "start": "vinext start",
     "test:unit": "node --test tests/*.test.ts",
-    "test": "npm run test:unit && npm run build && node --test tests/rendered-html.test.mjs",
+    "test:contracts": "node --test tests/*.test.mjs",
+    "test": "npm run test:unit && npm run build && npm run test:contracts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "verify": "npm test && npm run lint",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
