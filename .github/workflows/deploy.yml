@@ -1,0 +1,65 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare deployment metadata
+        id: metadata
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
+          DISPATCH_SHA: ${{ github.sha }}
+          DISPATCH_REF: ${{ github.ref_name }}
+          DISPATCH_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            echo "sha=$WORKFLOW_SHA" >> "$GITHUB_OUTPUT"
+            echo "ref=$WORKFLOW_BRANCH" >> "$GITHUB_OUTPUT"
+            echo "run_url=$WORKFLOW_URL" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=$DISPATCH_SHA" >> "$GITHUB_OUTPUT"
+            echo "ref=$DISPATCH_REF" >> "$GITHUB_OUTPUT"
+            echo "run_url=$DISPATCH_URL" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Trigger configured deployment target
+        shell: bash
+        env:
+          DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          DEPLOY_WEBHOOK_TOKEN: ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ steps.metadata.outputs.sha }}
+          REF: ${{ steps.metadata.outputs.ref }}
+          RUN_URL: ${{ steps.metadata.outputs.run_url }}
+        run: |
+          if [[ -z "$DEPLOY_WEBHOOK_URL" ]]; then
+            echo "DEPLOY_WEBHOOK_URL is not configured; deployment is intentionally skipped."
+            exit 0
+          fi
+
+          payload="$(node -e 'console.log(JSON.stringify({repository:process.env.REPOSITORY,sha:process.env.SHA,ref:process.env.REF,run_url:process.env.RUN_URL}))')"
+          headers=(-H "Content-Type: application/json" -H "X-GitHub-Event: push")
+          if [[ -n "$DEPLOY_WEBHOOK_TOKEN" ]]; then
+            headers+=(-H "Authorization: Bearer $DEPLOY_WEBHOOK_TOKEN")
+          fi
+
+          curl --fail --show-error --silent --request POST "${headers[@]}" --data "$payload" "$DEPLOY_WEBHOOK_URL"

@@ -1,0 +1,42 @@
+name: 功能建议
+description: 记录值得追踪的用户问题和可验收的产品改动。
+title: "[feature]: "
+labels:
+  - feature
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决的用户问题
+      description: 描述谁在什么场景下遇到了什么困难。
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 期望结果
+      description: 用可观察的用户结果描述，而不是先限定实现。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收条件
+      placeholder: "- 当…时，用户可以…\n- 当…时，系统会…"
+    validations:
+      required: true
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: 可能影响
+      options:
+        - label: 家庭数据或 D1 模型
+        - label: 共享口令、session 或隐私
+        - label: 离线同步
+        - label: 移动端交互
+        - label: 部署或公开访问
+  - type: textarea
+    id: task_link
+    attributes:
+      label: 仓库任务关联
+      description: 创建后在 docs/tasks/ 对应条目中填写本 Issue 编号。
