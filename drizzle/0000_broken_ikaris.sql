@@ -138,6 +138,8 @@ CREATE TABLE "shopping_items" (
 	CONSTRAINT "shopping_price_check" CHECK ("shopping_items"."actual_price" is null or "shopping_items"."actual_price" >= 0)
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX "dishes_household_id_idx" ON "dishes" USING btree ("household_id","id");--> statement-breakpoint
+CREATE UNIQUE INDEX "ingredients_household_id_idx" ON "ingredients" USING btree ("household_id","id");--> statement-breakpoint
 ALTER TABLE "dish_ingredients" ADD CONSTRAINT "dish_ingredients_household_id_households_id_fk" FOREIGN KEY ("household_id") REFERENCES "public"."households"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "dish_ingredients" ADD CONSTRAINT "dish_ingredients_dish_household_fk" FOREIGN KEY ("household_id","dish_id") REFERENCES "public"."dishes"("household_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "dish_ingredients" ADD CONSTRAINT "dish_ingredients_ingredient_household_fk" FOREIGN KEY ("household_id","ingredient_id") REFERENCES "public"."ingredients"("household_id","id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
@@ -153,11 +155,9 @@ ALTER TABLE "shopping_items" ADD CONSTRAINT "shopping_items_household_id_househo
 ALTER TABLE "shopping_items" ADD CONSTRAINT "shopping_ingredient_household_fk" FOREIGN KEY ("household_id","ingredient_id") REFERENCES "public"."ingredients"("household_id","id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "dish_ingredients_unique_idx" ON "dish_ingredients" USING btree ("household_id","dish_id","ingredient_id");--> statement-breakpoint
 CREATE INDEX "dish_ingredients_dish_idx" ON "dish_ingredients" USING btree ("household_id","dish_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "dishes_household_id_idx" ON "dishes" USING btree ("household_id","id");--> statement-breakpoint
 CREATE INDEX "dishes_household_enabled_idx" ON "dishes" USING btree ("household_id","enabled");--> statement-breakpoint
 CREATE INDEX "dishes_household_last_cooked_idx" ON "dishes" USING btree ("household_id","last_cooked_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "households_instance_key_idx" ON "households" USING btree ("instance_key");--> statement-breakpoint
-CREATE UNIQUE INDEX "ingredients_household_id_idx" ON "ingredients" USING btree ("household_id","id");--> statement-breakpoint
 CREATE UNIQUE INDEX "ingredients_household_name_idx" ON "ingredients" USING btree ("household_id","name");--> statement-breakpoint
 CREATE INDEX "ingredients_household_category_idx" ON "ingredients" USING btree ("household_id","category");--> statement-breakpoint
 CREATE UNIQUE INDEX "inventory_household_id_idx" ON "inventory_items" USING btree ("household_id","id");--> statement-breakpoint

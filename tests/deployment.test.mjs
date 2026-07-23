@@ -35,6 +35,31 @@ test("keeps production data services private and separates migration credentials
   assert.match(nginx, /proxy_set_header X-Forwarded-For \$remote_addr/);
 });
 
+test("creates composite reference keys before PostgreSQL foreign keys use them", async () => {
+  const migration = await readFile(
+    new URL("drizzle/0000_broken_ikaris.sql", root),
+    "utf8",
+  );
+  const dishesKey = migration.indexOf('CREATE UNIQUE INDEX "dishes_household_id_idx"');
+  const ingredientsKey = migration.indexOf('CREATE UNIQUE INDEX "ingredients_household_id_idx"');
+
+  assert.ok(dishesKey >= 0);
+  assert.ok(ingredientsKey >= 0);
+  for (const constraint of [
+    "dish_ingredients_dish_household_fk",
+    "meal_decisions_dish_household_fk",
+  ]) {
+    assert.ok(dishesKey < migration.indexOf(`ADD CONSTRAINT "${constraint}"`));
+  }
+  for (const constraint of [
+    "dish_ingredients_ingredient_household_fk",
+    "inventory_ingredient_household_fk",
+    "shopping_ingredient_household_fk",
+  ]) {
+    assert.ok(ingredientsKey < migration.indexOf(`ADD CONSTRAINT "${constraint}"`));
+  }
+});
+
 test("isolates the app from the legacy platform and uses the server path contract", async () => {
   const [compose, dockerfile, deployment, backup, restore, firstDeploy, backupService] = await Promise.all([
     readFile(new URL("compose.prod.yml", root), "utf8"),
