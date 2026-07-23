@@ -105,6 +105,7 @@ services:
     group_add: *secret-groups
     networks:
       - backend
+      - edge
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
@@ -135,6 +136,9 @@ networks:
   backend:
     name: fribench-pick-meal-well-backend-v1
     internal: true
+  edge:
+    name: fribench-pick-meal-well-edge-v1
+    driver: bridge
 
 volumes:
   postgres_data:

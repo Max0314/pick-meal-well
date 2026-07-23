@@ -13,9 +13,11 @@ flowchart LR
   A --> C["HttpOnly Cookie\nIndexedDB 离线队列"]
 ```
 
-只有应用容器映射到宿主机回环地址；PostgreSQL 与 Redis 不发布端口，三者只在应用专用的
-`fribench-pick-meal-well-backend-v1` 内部网络通信。该网络不复用服务器旧平台网络，
-避免多个 Compose 项目的 `postgres`、`redis` 服务别名互相污染。
+只有应用容器通过独立的 `fribench-pick-meal-well-edge-v1` 网络映射到宿主机回环地址。
+PostgreSQL 与 Redis 不发布端口，只与应用和迁移容器在
+`fribench-pick-meal-well-backend-v1` 内部网络通信。两个网络都不复用服务器旧平台网络，
+既避免多个 Compose 项目的 `postgres`、`redis` 服务别名互相污染，也保留宿主机 Nginx
+访问应用的网络路径。
 
 ## 代码边界
 

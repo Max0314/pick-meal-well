@@ -26,10 +26,20 @@ test("keeps production data services private and separates migration credentials
   assert.doesNotMatch(postgresBlock, /\n\s+ports:/);
   assert.doesNotMatch(redisBlock, /\n\s+ports:/);
   assert.match(appBlock, /127\.0\.0\.1:3000:3000/);
+  assert.match(appBlock, /networks:\s+- backend\s+- edge/);
+  assert.doesNotMatch(postgresBlock, /\s+- edge/);
+  assert.doesNotMatch(redisBlock, /\s+- edge/);
   assert.match(appBlock, /\/run\/secrets\/database_url/);
   assert.doesNotMatch(appBlock, /migration_database_url/);
   assert.match(compose, /\/run\/secrets\/migration_database_url/);
-  assert.match(compose, /internal: true/);
+  assert.match(
+    compose,
+    /backend:\s+name: fribench-pick-meal-well-backend-v1\s+internal: true/,
+  );
+  assert.match(
+    compose,
+    /edge:\s+name: fribench-pick-meal-well-edge-v1\s+driver: bridge/,
+  );
   assert.match(dockerfile, /\/app\/\.next\/standalone/);
   assert.match(nginx, /listen 127\.0\.0\.1:8080/);
   assert.match(nginx, /proxy_set_header X-Forwarded-For \$remote_addr/);
@@ -73,6 +83,7 @@ test("isolates the app from the legacy platform and uses the server path contrac
 
   assert.match(compose, /^name: fribench-pick-meal-well$/m);
   assert.match(compose, /name: fribench-pick-meal-well-backend-v1/);
+  assert.match(compose, /name: fribench-pick-meal-well-edge-v1/);
   assert.doesNotMatch(compose, /name: fribench-backend/);
   assert.match(compose, /\/etc\/fribench\/pick-meal-well\.env/);
   assert.match(
