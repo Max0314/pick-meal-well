@@ -4,12 +4,16 @@ ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 
 FROM base AS dependencies
+ARG NPM_REGISTRY=https://registry.npmjs.org
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts=false && npm cache clean --force
+RUN --mount=type=cache,id=pick-meal-well-npm,target=/root/.npm,sharing=locked \
+    npm ci --omit=dev --ignore-scripts=false --registry="${NPM_REGISTRY}"
 
 FROM base AS build-dependencies
+ARG NPM_REGISTRY=https://registry.npmjs.org
 COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts=false && npm cache clean --force
+RUN --mount=type=cache,id=pick-meal-well-npm,target=/root/.npm,sharing=locked \
+    npm ci --ignore-scripts=false --registry="${NPM_REGISTRY}"
 
 FROM base AS builder
 COPY --from=build-dependencies /app/node_modules ./node_modules

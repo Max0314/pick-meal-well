@@ -36,8 +36,9 @@ test("keeps production data services private and separates migration credentials
 });
 
 test("isolates the app from the legacy platform and uses the server path contract", async () => {
-  const [compose, deployment, backup, restore, firstDeploy, backupService] = await Promise.all([
+  const [compose, dockerfile, deployment, backup, restore, firstDeploy, backupService] = await Promise.all([
     readFile(new URL("compose.prod.yml", root), "utf8"),
+    readFile(new URL("Dockerfile", root), "utf8"),
     readFile(new URL("docs/deployment.md", root), "utf8"),
     readFile(new URL("ops/scripts/backup-postgres.sh", root), "utf8"),
     readFile(new URL("ops/scripts/restore-postgres.sh", root), "utf8"),
@@ -49,6 +50,17 @@ test("isolates the app from the legacy platform and uses the server path contrac
   assert.match(compose, /name: fribench-pick-meal-well-backend-v1/);
   assert.doesNotMatch(compose, /name: fribench-backend/);
   assert.match(compose, /\/etc\/fribench\/pick-meal-well\.env/);
+  assert.match(
+    compose,
+    /NPM_REGISTRY: \$\{NPM_REGISTRY:-https:\/\/registry\.npmmirror\.com\}/,
+  );
+
+  const npmCacheMounts = dockerfile.match(
+    /--mount=type=cache,id=pick-meal-well-npm,target=\/root\/\.npm,sharing=locked/g,
+  );
+  assert.equal(npmCacheMounts?.length, 2);
+  assert.match(dockerfile, /npm ci .*--registry="\$\{NPM_REGISTRY\}"/);
+  assert.doesNotMatch(dockerfile, /npm config set/);
 
   for (const asset of [deployment, backup, restore, backupService]) {
     assert.match(asset, /\/srv\/fribench\/apps\/web\/pick-meal-well\/current/);

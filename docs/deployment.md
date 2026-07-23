@@ -62,6 +62,11 @@ sudo ops/scripts/first-deploy.sh "$PWD"
 
 该脚本只在文件不存在时生成独立随机 Secret，不会打印 Secret；它完成 Compose 渲染、镜像构建、迁移、ready 检查、Nginx 切换、备份定时器安装和首次备份。首次认领令牌由项目所有者在可信服务器终端直接读取，不复制到 Git、日志或部署记录。
 
+Fribench 生产 Compose 的依赖构建默认使用 `https://registry.npmmirror.com`，两个 npm
+阶段通过 BuildKit cache mount 复用下载内容且不写入最终镜像。可在构建命令环境中用
+`NPM_REGISTRY` 覆盖；这不会修改宿主机或账号的全局 npm 配置。镜像选择以服务器实测
+HTTPS 下载速度和完整性校验为准，不使用返回明文 HTTP tarball 地址的源。
+
 ## 3. Nginx
 
 ```bash
