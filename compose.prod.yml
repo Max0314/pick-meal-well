@@ -109,7 +109,7 @@ services:
       - backend
       - edge
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:21001:3000"
     depends_on:
       migrate:
         condition: service_completed_successfully

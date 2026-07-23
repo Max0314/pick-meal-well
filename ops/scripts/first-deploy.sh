@@ -134,13 +134,13 @@ docker compose -f "${compose_file}" up -d
 
 for _ in {1..30}; do
   if curl --fail --silent --show-error --max-time 5 \
-    http://127.0.0.1:3000/api/health/ready >/dev/null; then
+    http://127.0.0.1:21001/api/health/ready >/dev/null; then
     break
   fi
   sleep 2
 done
 curl --fail --silent --show-error --max-time 5 \
-  http://127.0.0.1:3000/api/health/ready >/dev/null
+  http://127.0.0.1:21001/api/health/ready >/dev/null
 
 install -m 0644 -o root -g root \
   "${release_dir}/ops/nginx/pick-meal-well.conf" \

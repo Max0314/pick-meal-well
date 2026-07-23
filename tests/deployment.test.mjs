@@ -25,7 +25,7 @@ test("keeps production data services private and separates migration credentials
 
   assert.doesNotMatch(postgresBlock, /\n\s+ports:/);
   assert.doesNotMatch(redisBlock, /\n\s+ports:/);
-  assert.match(appBlock, /127\.0\.0\.1:3000:3000/);
+  assert.match(appBlock, /127\.0\.0\.1:21001:3000/);
   assert.match(appBlock, /networks:\s+- backend\s+- edge/);
   assert.doesNotMatch(postgresBlock, /\s+- edge/);
   assert.doesNotMatch(redisBlock, /\s+- edge/);

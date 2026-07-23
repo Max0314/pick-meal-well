@@ -7,7 +7,7 @@
 ```mermaid
 flowchart LR
   B["手机 / 浏览器"] --> N["宿主机 Nginx\n127.0.0.1:8080"]
-  N --> A["Next.js standalone\n127.0.0.1:3000"]
+  N --> A["Next.js standalone\n127.0.0.1:21001"]
   A --> P[("PostgreSQL 17\n业务事实源")]
   A --> R[("Redis 8\n限流 / 60 秒快照")]
   A --> C["HttpOnly Cookie\nIndexedDB 离线队列"]

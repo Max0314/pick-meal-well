@@ -54,7 +54,7 @@ sudo docker compose -f compose.prod.yml config --quiet
 sudo docker compose -f compose.prod.yml build --pull
 sudo docker compose -f compose.prod.yml up -d
 sudo docker compose -f compose.prod.yml ps
-curl --fail http://127.0.0.1:3000/api/health/ready
+curl --fail http://127.0.0.1:21001/api/health/ready
 ```
 
 新数据库卷首次初始化时会创建无建库、建角色或超级用户权限的 `pick_meal_well_app` 角色。`migrate` 一次性容器会使用 owner 账户等待 PostgreSQL healthy 后应用已提交迁移；只有迁移成功，应用容器才会启动。所有服务使用 10 MB × 3 的 Docker JSON 日志轮转。
@@ -63,7 +63,7 @@ curl --fail http://127.0.0.1:3000/api/health/ready
 Compose 项目、内部后端网络和应用 edge 网络均使用应用专用名称。PostgreSQL、Redis
 只连接 `fribench-pick-meal-well-backend-v1`；应用同时连接该内部网络和
 `fribench-pick-meal-well-edge-v1`，后者仅用于把应用发布到宿主机
-`127.0.0.1:3000`。不要改回旧平台的 `fribench-backend`，否则两个项目的
+`127.0.0.1:21001`。不要改回旧平台的 `fribench-backend`，否则两个项目的
 `postgres`、`redis` DNS 别名会发生冲突。
 
 首次部署可在 `current` 已指向待发布版本后运行：
@@ -95,7 +95,7 @@ curl --fail http://127.0.0.1:8080/api/health/ready
 ```
 
 仓库配置故意只监听回环地址，符合当前“公网仅 SSH 22”的边界。以后公开服务时，应先配置域名、TLS、`APP_ORIGIN` 和 Secure Cookie，再单独评审 UFW 的 80/443 变更；不要直接把应用的 3000 端口开放公网。
-旧的 `fribench-private-status` 与本应用占用相同的 `127.0.0.1:8080`，只能在应用的 `127.0.0.1:3000` ready 成功后切换；不能把两个站点同时启用。
+旧的 `fribench-private-status` 与本应用占用相同的 `127.0.0.1:8080`，只能在应用的 `127.0.0.1:21001` ready 成功后切换；不能把两个站点同时启用。
 
 ## 4. 备份与恢复演练
 
