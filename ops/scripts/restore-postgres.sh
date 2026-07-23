@@ -11,8 +11,8 @@ if [[ $# -ne 1 || ! -f "$1" ]]; then
 fi
 
 backup="$(realpath "$1")"
-compose_file="${COMPOSE_FILE:-/srv/fribench/apps/pick-meal-well/current/compose.prod.yml}"
-grant_sql="${GRANT_SQL:-/srv/fribench/apps/pick-meal-well/current/ops/postgres/grant-app-role.sql}"
+compose_file="${COMPOSE_FILE:-/srv/fribench/apps/web/pick-meal-well/current/compose.prod.yml}"
+grant_sql="${GRANT_SQL:-/srv/fribench/apps/web/pick-meal-well/current/ops/postgres/grant-app-role.sql}"
 if [[ -f "${backup}.sha256" ]]; then
   (cd "$(dirname "${backup}")" && sha256sum --check "$(basename "${backup}").sha256")
 fi

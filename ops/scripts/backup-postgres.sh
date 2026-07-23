@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 backup_dir="${BACKUP_DIR:-/srv/fribench/backups}"
-compose_file="${COMPOSE_FILE:-/srv/fribench/apps/pick-meal-well/current/compose.prod.yml}"
+compose_file="${COMPOSE_FILE:-/srv/fribench/apps/web/pick-meal-well/current/compose.prod.yml}"
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 target="${backup_dir}/pick-meal-well-${timestamp}.sql.gz"
 

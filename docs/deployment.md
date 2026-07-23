@@ -29,17 +29,18 @@ redis_url:              redis://:<URL 编码后的密码>@redis:6379/0
 复制并调整非敏感运行配置：
 
 ```bash
-sudo install -m 0644 ops/config/pick-meal-well.env.example /srv/fribench/ops/pick-meal-well.env
+sudo install -m 0644 ops/config/pick-meal-well.env.example /etc/fribench/pick-meal-well.env
 ```
 
 当前 Nginx 只监听 `127.0.0.1:8080` 时保留 `SESSION_COOKIE_SECURE=false`。接入真实 HTTPS 域名后，必须将 `APP_ORIGIN` 改为完整公网源并设为 `true`。
+这份文件只保存非敏感运行参数；数据库、Redis 和首次认领 Secret 仍必须分别保存在上列 `0600` 文件中。
 
 ## 2. 构建与启动
 
 每个版本放入独立目录，并让 `current` 指向待发布版本。以下命令不会开放公网端口：
 
 ```bash
-cd /srv/fribench/apps/pick-meal-well/current
+cd /srv/fribench/apps/web/pick-meal-well/current
 sudo docker compose -f compose.prod.yml config --quiet
 sudo docker compose -f compose.prod.yml build --pull
 sudo docker compose -f compose.prod.yml up -d
@@ -50,26 +51,36 @@ curl --fail http://127.0.0.1:3000/api/health/ready
 新数据库卷首次初始化时会创建无建库、建角色或超级用户权限的 `pick_meal_well_app` 角色。`migrate` 一次性容器会使用 owner 账户等待 PostgreSQL healthy 后应用已提交迁移；只有迁移成功，应用容器才会启动。所有服务使用 10 MB × 3 的 Docker JSON 日志轮转。
 
 本次重构明确不迁移旧数据，因此 Compose 使用带 `pick-meal-well` 和 `v1` 的全新命名卷；旧 PostgreSQL/Redis 卷不会被覆盖或删除。确认新版本稳定并完成备份/恢复演练后，再单独决定是否清理旧卷。
+Compose 项目和内部网络也使用应用专用名称；不要改回旧平台的 `fribench-backend`，否则两个项目的 `postgres`、`redis` DNS 别名会发生冲突。
+
+首次部署可在 `current` 已指向待发布版本后运行：
+
+```bash
+cd /srv/fribench/apps/web/pick-meal-well/current
+sudo ops/scripts/first-deploy.sh "$PWD"
+```
+
+该脚本只在文件不存在时生成独立随机 Secret，不会打印 Secret；它完成 Compose 渲染、镜像构建、迁移、ready 检查、Nginx 切换、备份定时器安装和首次备份。首次认领令牌由项目所有者在可信服务器终端直接读取，不复制到 Git、日志或部署记录。
 
 ## 3. Nginx
 
 ```bash
 sudo install -m 0644 ops/nginx/pick-meal-well.conf /etc/nginx/sites-available/pick-meal-well
-sudo ln -s /etc/nginx/sites-available/pick-meal-well /etc/nginx/sites-enabled/pick-meal-well
+sudo ln -sfn /etc/nginx/sites-available/pick-meal-well /etc/nginx/sites-enabled/pick-meal-well
+sudo rm -f /etc/nginx/sites-enabled/fribench-private-status
 sudo nginx -t
 sudo systemctl reload nginx
 curl --fail http://127.0.0.1:8080/api/health/ready
 ```
 
 仓库配置故意只监听回环地址，符合当前“公网仅 SSH 22”的边界。以后公开服务时，应先配置域名、TLS、`APP_ORIGIN` 和 Secure Cookie，再单独评审 UFW 的 80/443 变更；不要直接把应用的 3000 端口开放公网。
+旧的 `fribench-private-status` 与本应用占用相同的 `127.0.0.1:8080`，只能在应用的 `127.0.0.1:3000` ready 成功后切换；不能把两个站点同时启用。
 
 ## 4. 备份与恢复演练
 
-PostgreSQL 是必须备份的事实源；Redis 仅保存可重建缓存和限流状态。安装脚本和定时器：
+PostgreSQL 是必须备份的事实源；Redis 仅保存可重建缓存和限流状态。安装定时器：
 
 ```bash
-sudo install -m 0700 ops/scripts/backup-postgres.sh /srv/fribench/ops/backup-postgres.sh
-sudo install -m 0700 ops/scripts/restore-postgres.sh /srv/fribench/ops/restore-postgres.sh
 sudo install -m 0644 ops/systemd/pick-meal-well-backup.* /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now pick-meal-well-backup.timer
@@ -79,10 +90,13 @@ sudo systemctl start pick-meal-well-backup.service
 备份写入 `/srv/fribench/backups`，生成 SHA-256，默认保留 14 天。至少在隔离环境做一次恢复演练：
 
 ```bash
-sudo CONFIRM_RESTORE=RESTORE /srv/fribench/ops/restore-postgres.sh /srv/fribench/backups/<backup>.sql.gz
+sudo CONFIRM_RESTORE=RESTORE \
+  /srv/fribench/apps/web/pick-meal-well/current/ops/scripts/restore-postgres.sh \
+  /srv/fribench/backups/<backup>.sql.gz
 ```
 
 恢复会替换当前数据库并短暂停止应用，必须先确认备份校验通过。
+脚本始终从版本化的应用 `current` 目录执行，不向 `/srv/fribench/ops` 运维 Git 工作树写入未跟踪文件。
 
 ## 5. 发布与回滚检查
 

@@ -1,4 +1,4 @@
-name: fribench
+name: fribench-pick-meal-well
 
 x-logging: &default-logging
   driver: json-file
@@ -85,7 +85,7 @@ services:
       target: runner
     restart: unless-stopped
     env_file:
-      - /srv/fribench/ops/pick-meal-well.env
+      - /etc/fribench/pick-meal-well.env
     environment:
       DATABASE_URL_FILE: /run/secrets/database_url
       REDIS_URL_FILE: /run/secrets/redis_url
@@ -121,7 +121,7 @@ services:
 
 networks:
   backend:
-    name: fribench-backend
+    name: fribench-pick-meal-well-backend-v1
     internal: true
 
 volumes:
