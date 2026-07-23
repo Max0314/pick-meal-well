@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  createSalt,
   createSessionToken,
   derivePasscode,
   validatePasscode,
@@ -9,19 +8,11 @@ import {
 } from "../app/lib/auth/crypto.ts";
 
 test("derives and verifies a passcode without storing plaintext", async () => {
-  const salt = createSalt();
-  const digest = await derivePasscode("family-meal-2026", salt);
+  const digest = await derivePasscode("family-meal-2026");
   assert.notEqual(digest, "family-meal-2026");
-  assert.match(digest, /^pbkdf2-sha256\$20000\$[A-Za-z0-9_-]+$/u);
-  assert.equal(await verifyPasscode("family-meal-2026", salt, digest), true);
-  assert.equal(await verifyPasscode("wrong-passcode", salt, digest), false);
-});
-
-test("uses a unique 16-byte salt", () => {
-  const first = createSalt();
-  const second = createSalt();
-  assert.notEqual(first, second);
-  assert.equal(Buffer.from(first, "base64url").byteLength, 16);
+  assert.match(digest, /^\$argon2id\$/u);
+  assert.equal(await verifyPasscode("family-meal-2026", digest), true);
+  assert.equal(await verifyPasscode("wrong-passcode", digest), false);
 });
 
 test("session tokens are random and only their digest is persisted", async () => {
@@ -32,8 +23,9 @@ test("session tokens are random and only their digest is persisted", async () =>
   assert.equal(Buffer.from(first.token, "base64url").byteLength, 32);
 });
 
-test("requires at least eight non-whitespace passcode characters", () => {
-  assert.equal(validatePasscode("1234567"), "家庭口令至少需要 8 个字符");
-  assert.equal(validatePasscode("        "), "家庭口令至少需要 8 个字符");
-  assert.equal(validatePasscode("family88"), null);
+test("enforces a bounded family passcode", () => {
+  assert.equal(validatePasscode("123456789"), "家庭口令至少需要 10 个字符");
+  assert.equal(validatePasscode("          "), "家庭口令至少需要 10 个字符");
+  assert.equal(validatePasscode("family-2026"), null);
+  assert.equal(validatePasscode("x".repeat(129)), "家庭口令不能超过 128 个字符");
 });

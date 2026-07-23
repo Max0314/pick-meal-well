@@ -26,7 +26,10 @@ test("keeps the personal governance system and automation entry points", async (
   await Promise.all(requiredPaths.map((path) => access(new URL(path, repositoryRoot))));
 
   const packageJson = JSON.parse(await readFile(new URL("package.json", repositoryRoot), "utf8"));
-  assert.equal(packageJson.scripts.verify, "npm test && npm run lint");
+  assert.equal(
+    packageJson.scripts.verify,
+    "npm test && npm run typecheck && npm run build && npm run lint",
+  );
   assert.equal(packageJson.scripts["test:contracts"], "node --test tests/*.test.mjs");
 
   const [ci, deploy] = await Promise.all([

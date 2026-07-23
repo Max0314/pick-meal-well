@@ -1,79 +1,106 @@
 {
-  "version": "6",
-  "dialect": "sqlite",
-  "id": "5bb48b5a-2097-4a1d-9630-051b7ac6c9c1",
+  "id": "bdca3849-0c24-4d5b-9252-812a2dc2342b",
   "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
   "tables": {
-    "dish_ingredients": {
+    "public.dish_ingredients": {
       "name": "dish_ingredients",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": false
+          "default": "gen_random_uuid()"
         },
         "household_id": {
           "name": "household_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "dish_id": {
           "name": "dish_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "ingredient_id": {
           "name": "ingredient_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "amount": {
           "name": "amount",
-          "type": "real",
+          "type": "numeric(12, 3)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "unit": {
           "name": "unit",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "required": {
           "name": "required",
-          "type": "integer",
+          "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         }
       },
       "indexes": {
-        "dish_ingredients_dish_idx": {
-          "name": "dish_ingredients_dish_idx",
-          "columns": [
-            "household_id",
-            "dish_id"
-          ],
-          "isUnique": false
-        },
         "dish_ingredients_unique_idx": {
           "name": "dish_ingredients_unique_idx",
           "columns": [
-            "dish_id",
-            "ingredient_id"
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "dish_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ingredient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": true
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "dish_ingredients_dish_idx": {
+          "name": "dish_ingredients_dish_idx",
+          "columns": [
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "dish_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -90,27 +117,31 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "dish_ingredients_dish_id_dishes_id_fk": {
-          "name": "dish_ingredients_dish_id_dishes_id_fk",
+        "dish_ingredients_dish_household_fk": {
+          "name": "dish_ingredients_dish_household_fk",
           "tableFrom": "dish_ingredients",
           "tableTo": "dishes",
           "columnsFrom": [
+            "household_id",
             "dish_id"
           ],
           "columnsTo": [
+            "household_id",
             "id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "dish_ingredients_ingredient_id_ingredients_id_fk": {
-          "name": "dish_ingredients_ingredient_id_ingredients_id_fk",
+        "dish_ingredients_ingredient_household_fk": {
+          "name": "dish_ingredients_ingredient_household_fk",
           "tableFrom": "dish_ingredients",
           "tableTo": "ingredients",
           "columnsFrom": [
+            "household_id",
             "ingredient_id"
           ],
           "columnsTo": [
+            "household_id",
             "id"
           ],
           "onDelete": "restrict",
@@ -119,150 +150,201 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {
+        "dish_ingredients_amount_check": {
+          "name": "dish_ingredients_amount_check",
+          "value": "\"dish_ingredients\".\"amount\" > 0"
+        },
+        "dish_ingredients_unit_length_check": {
+          "name": "dish_ingredients_unit_length_check",
+          "value": "char_length(\"dish_ingredients\".\"unit\") between 1 and 20"
+        }
+      },
+      "isRLSEnabled": false
     },
-    "dishes": {
+    "public.dishes": {
       "name": "dishes",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": false
+          "default": "gen_random_uuid()"
         },
         "household_id": {
           "name": "household_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "name": {
           "name": "name",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "category": {
           "name": "category",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "meal_types": {
           "name": "meal_types",
-          "type": "text",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "'[]'"
+          "default": "'[]'::jsonb"
+        },
+        "base_servings": {
+          "name": "base_servings",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 2
         },
         "cooking_time": {
           "name": "cooking_time",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "difficulty": {
           "name": "difficulty",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'简单'"
         },
         "taste_tags": {
           "name": "taste_tags",
-          "type": "text",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "'[]'"
+          "default": "'[]'::jsonb"
         },
         "last_cooked_at": {
           "name": "last_cooked_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "favorite_level": {
           "name": "favorite_level",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": 3
         },
         "estimated_cost": {
           "name": "estimated_cost",
-          "type": "real",
+          "type": "numeric(12, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": 0
+          "default": "'0'"
         },
         "seasonal": {
           "name": "seasonal",
-          "type": "integer",
+          "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": false
         },
         "enabled": {
           "name": "enabled",
-          "type": "integer",
+          "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "steps": {
           "name": "steps",
-          "type": "text",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "'[]'"
+          "default": "'[]'::jsonb"
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "now()"
         }
       },
       "indexes": {
+        "dishes_household_id_idx": {
+          "name": "dishes_household_id_idx",
+          "columns": [
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "dishes_household_enabled_idx": {
           "name": "dishes_household_enabled_idx",
           "columns": [
-            "household_id",
-            "enabled"
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "enabled",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "dishes_household_last_cooked_idx": {
           "name": "dishes_household_last_cooked_idx",
           "columns": [
-            "household_id",
-            "last_cooked_at"
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_cooked_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -282,45 +364,73 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {
+        "dishes_name_length_check": {
+          "name": "dishes_name_length_check",
+          "value": "char_length(\"dishes\".\"name\") between 1 and 120"
+        },
+        "dishes_servings_check": {
+          "name": "dishes_servings_check",
+          "value": "\"dishes\".\"base_servings\" between 1 and 12"
+        },
+        "dishes_time_check": {
+          "name": "dishes_time_check",
+          "value": "\"dishes\".\"cooking_time\" between 1 and 480"
+        },
+        "dishes_favorite_check": {
+          "name": "dishes_favorite_check",
+          "value": "\"dishes\".\"favorite_level\" between 0 and 5"
+        },
+        "dishes_cost_check": {
+          "name": "dishes_cost_check",
+          "value": "\"dishes\".\"estimated_cost\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
     },
-    "households": {
+    "public.households": {
       "name": "households",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": false
+          "default": "gen_random_uuid()"
+        },
+        "instance_key": {
+          "name": "instance_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'default'"
+        },
+        "data_epoch": {
+          "name": "data_epoch",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "name": {
           "name": "name",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
-        "passcode_digest": {
-          "name": "passcode_digest",
+        "passcode_hash": {
+          "name": "passcode_hash",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "passcode_salt": {
-          "name": "passcode_salt",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "default_people": {
           "name": "default_people",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": 2
         },
         "default_max_minutes": {
@@ -328,7 +438,6 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": 30
         },
         "default_taste": {
@@ -336,158 +445,212 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'下饭'"
-        },
-        "failed_attempts": {
-          "name": "failed_attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "locked_until": {
-          "name": "locked_until",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         },
         "version": {
           "name": "version",
-          "type": "integer",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": 1
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "households_instance_key_idx": {
+          "name": "households_instance_key_idx",
+          "columns": [
+            {
+              "expression": "instance_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {
+        "households_singleton_check": {
+          "name": "households_singleton_check",
+          "value": "\"households\".\"instance_key\" = 'default'"
+        },
+        "households_name_length_check": {
+          "name": "households_name_length_check",
+          "value": "char_length(\"households\".\"name\") between 1 and 40"
+        },
+        "households_people_check": {
+          "name": "households_people_check",
+          "value": "\"households\".\"default_people\" between 1 and 12"
+        },
+        "households_minutes_check": {
+          "name": "households_minutes_check",
+          "value": "\"households\".\"default_max_minutes\" between 10 and 180"
+        }
+      },
+      "isRLSEnabled": false
     },
-    "ingredients": {
+    "public.ingredients": {
       "name": "ingredients",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": false
+          "default": "gen_random_uuid()"
         },
         "household_id": {
           "name": "household_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "name": {
           "name": "name",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "category": {
           "name": "category",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "default_unit": {
           "name": "default_unit",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "default_price": {
           "name": "default_price",
-          "type": "real",
+          "type": "numeric(12, 4)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": 0
+          "default": "'0'"
         },
         "shelf_life_days": {
           "name": "shelf_life_days",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": 7
         },
         "season_months": {
           "name": "season_months",
-          "type": "text",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "'[]'"
+          "default": "'[]'::jsonb"
         },
         "aliases": {
           "name": "aliases",
-          "type": "text",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "'[]'"
+          "default": "'[]'::jsonb"
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "now()"
         }
       },
       "indexes": {
-        "ingredients_household_category_idx": {
-          "name": "ingredients_household_category_idx",
+        "ingredients_household_id_idx": {
+          "name": "ingredients_household_id_idx",
           "columns": [
-            "household_id",
-            "category"
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "ingredients_household_name_idx": {
           "name": "ingredients_household_name_idx",
           "columns": [
-            "household_id",
-            "name"
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": true
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ingredients_household_category_idx": {
+          "name": "ingredients_household_category_idx",
+          "columns": [
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "category",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -507,116 +670,168 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {
+        "ingredients_name_length_check": {
+          "name": "ingredients_name_length_check",
+          "value": "char_length(\"ingredients\".\"name\") between 1 and 80"
+        },
+        "ingredients_price_check": {
+          "name": "ingredients_price_check",
+          "value": "\"ingredients\".\"default_price\" >= 0"
+        },
+        "ingredients_shelf_life_check": {
+          "name": "ingredients_shelf_life_check",
+          "value": "\"ingredients\".\"shelf_life_days\" between 0 and 3650"
+        }
+      },
+      "isRLSEnabled": false
     },
-    "inventory_items": {
+    "public.inventory_items": {
       "name": "inventory_items",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": false
+          "default": "gen_random_uuid()"
         },
         "household_id": {
           "name": "household_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "ingredient_id": {
           "name": "ingredient_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "amount": {
           "name": "amount",
-          "type": "real",
+          "type": "numeric(12, 3)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "unit": {
           "name": "unit",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "bought_at": {
           "name": "bought_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "expire_at": {
           "name": "expire_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "location": {
           "name": "location",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'fridge'"
         },
         "total_cost": {
           "name": "total_cost",
-          "type": "real",
+          "type": "numeric(12, 2)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "note": {
           "name": "note",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "''"
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "now()"
         }
       },
       "indexes": {
+        "inventory_household_id_idx": {
+          "name": "inventory_household_id_idx",
+          "columns": [
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "inventory_household_expire_idx": {
           "name": "inventory_household_expire_idx",
           "columns": [
-            "household_id",
-            "expire_at"
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "expire_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "inventory_household_ingredient_idx": {
           "name": "inventory_household_ingredient_idx",
           "columns": [
-            "household_id",
-            "ingredient_id"
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ingredient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -633,14 +848,16 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "inventory_items_ingredient_id_ingredients_id_fk": {
-          "name": "inventory_items_ingredient_id_ingredients_id_fk",
+        "inventory_ingredient_household_fk": {
+          "name": "inventory_ingredient_household_fk",
           "tableFrom": "inventory_items",
           "tableTo": "ingredients",
           "columnsFrom": [
+            "household_id",
             "ingredient_id"
           ],
           "columnsTo": [
+            "household_id",
             "id"
           ],
           "onDelete": "restrict",
@@ -649,92 +866,133 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {
+        "inventory_amount_check": {
+          "name": "inventory_amount_check",
+          "value": "\"inventory_items\".\"amount\" > 0"
+        },
+        "inventory_location_check": {
+          "name": "inventory_location_check",
+          "value": "\"inventory_items\".\"location\" in ('fridge', 'freezer', 'pantry')"
+        },
+        "inventory_cost_check": {
+          "name": "inventory_cost_check",
+          "value": "\"inventory_items\".\"total_cost\" is null or \"inventory_items\".\"total_cost\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
     },
-    "meal_decisions": {
+    "public.meal_decisions": {
       "name": "meal_decisions",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": false
+          "default": "gen_random_uuid()"
         },
         "household_id": {
           "name": "household_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "dish_id": {
           "name": "dish_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "meal_type": {
           "name": "meal_type",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "action": {
           "name": "action",
           "type": "text",
           "primaryKey": false,
+          "notNull": true
+        },
+        "people": {
+          "name": "people",
+          "type": "integer",
+          "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "default": 2
         },
         "dislike_tag": {
           "name": "dislike_tag",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "dislike_expires_at": {
           "name": "dislike_expires_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "estimated_cost": {
           "name": "estimated_cost",
-          "type": "real",
+          "type": "numeric(12, 2)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "decided_at": {
           "name": "decided_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "now()"
         }
       },
       "indexes": {
         "decisions_household_time_idx": {
           "name": "decisions_household_time_idx",
           "columns": [
-            "household_id",
-            "decided_at"
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "decided_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "decisions_household_dish_idx": {
           "name": "decisions_household_dish_idx",
           "columns": [
-            "household_id",
-            "dish_id"
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "dish_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -751,65 +1009,96 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "meal_decisions_dish_id_dishes_id_fk": {
-          "name": "meal_decisions_dish_id_dishes_id_fk",
+        "meal_decisions_dish_household_fk": {
+          "name": "meal_decisions_dish_household_fk",
           "tableFrom": "meal_decisions",
           "tableTo": "dishes",
           "columnsFrom": [
+            "household_id",
             "dish_id"
           ],
           "columnsTo": [
+            "household_id",
             "id"
           ],
-          "onDelete": "set null",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {
+        "decisions_meal_type_check": {
+          "name": "decisions_meal_type_check",
+          "value": "\"meal_decisions\".\"meal_type\" in ('breakfast', 'lunch', 'dinner')"
+        },
+        "decisions_action_check": {
+          "name": "decisions_action_check",
+          "value": "\"meal_decisions\".\"action\" in ('accept', 'dislike')"
+        },
+        "decisions_people_check": {
+          "name": "decisions_people_check",
+          "value": "\"meal_decisions\".\"people\" between 1 and 12"
+        },
+        "decisions_cost_check": {
+          "name": "decisions_cost_check",
+          "value": "\"meal_decisions\".\"estimated_cost\" is null or \"meal_decisions\".\"estimated_cost\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
     },
-    "mutation_receipts": {
+    "public.mutation_receipts": {
       "name": "mutation_receipts",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
         },
         "household_id": {
           "name": "household_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "response_json": {
           "name": "response_json",
-          "type": "text",
+          "type": "jsonb",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "now()"
         }
       },
       "indexes": {
-        "mutation_receipts_household_idx": {
-          "name": "mutation_receipts_household_idx",
+        "mutation_receipts_household_created_idx": {
+          "name": "mutation_receipts_household_created_idx",
           "columns": [
-            "household_id",
-            "created_at"
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -827,72 +1116,109 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
+      "compositePrimaryKeys": {
+        "mutation_receipts_pk": {
+          "name": "mutation_receipts_pk",
+          "columns": [
+            "household_id",
+            "id"
+          ]
+        }
+      },
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "sessions": {
+    "public.sessions": {
       "name": "sessions",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": false
+          "default": "gen_random_uuid()"
         },
         "household_id": {
           "name": "household_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "token_digest": {
           "name": "token_digest",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "expires_at": {
           "name": "expires_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "last_used_at": {
           "name": "last_used_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "now()"
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "now()"
         }
       },
       "indexes": {
         "sessions_token_digest_idx": {
           "name": "sessions_token_digest_idx",
           "columns": [
-            "token_digest"
+            {
+              "expression": "token_digest",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": true
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "sessions_household_idx": {
           "name": "sessions_household_idx",
           "columns": [
-            "household_id"
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sessions_expiry_idx": {
+          "name": "sessions_expiry_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -912,52 +1238,50 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "shopping_items": {
+    "public.shopping_items": {
       "name": "shopping_items",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": false
+          "default": "gen_random_uuid()"
         },
         "household_id": {
           "name": "household_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "ingredient_id": {
           "name": "ingredient_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "amount": {
           "name": "amount",
-          "type": "real",
+          "type": "numeric(12, 3)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "unit": {
           "name": "unit",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "checked": {
           "name": "checked",
-          "type": "integer",
+          "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": false
         },
         "source": {
@@ -965,49 +1289,98 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'manual'"
         },
         "actual_price": {
           "name": "actual_price",
-          "type": "real",
+          "type": "numeric(12, 2)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "text",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "now()"
         }
       },
       "indexes": {
+        "shopping_household_id_idx": {
+          "name": "shopping_household_id_idx",
+          "columns": [
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "shopping_household_checked_idx": {
           "name": "shopping_household_checked_idx",
           "columns": [
-            "household_id",
-            "checked"
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "checked",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "shopping_household_ingredient_idx": {
           "name": "shopping_household_ingredient_idx",
           "columns": [
-            "household_id",
-            "ingredient_id"
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ingredient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1024,14 +1397,16 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "shopping_items_ingredient_id_ingredients_id_fk": {
-          "name": "shopping_items_ingredient_id_ingredients_id_fk",
+        "shopping_ingredient_household_fk": {
+          "name": "shopping_ingredient_household_fk",
           "tableFrom": "shopping_items",
           "tableTo": "ingredients",
           "columnsFrom": [
+            "household_id",
             "ingredient_id"
           ],
           "columnsTo": [
+            "household_id",
             "id"
           ],
           "onDelete": "restrict",
@@ -1040,17 +1415,33 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {
+        "shopping_amount_check": {
+          "name": "shopping_amount_check",
+          "value": "\"shopping_items\".\"amount\" > 0"
+        },
+        "shopping_source_check": {
+          "name": "shopping_source_check",
+          "value": "\"shopping_items\".\"source\" in ('manual', 'dish', 'plan')"
+        },
+        "shopping_price_check": {
+          "name": "shopping_price_check",
+          "value": "\"shopping_items\".\"actual_price\" is null or \"shopping_items\".\"actual_price\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
     }
   },
-  "views": {},
   "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
   "_meta": {
+    "columns": {},
     "schemas": {},
-    "tables": {},
-    "columns": {}
-  },
-  "internal": {
-    "indexes": {}
+    "tables": {}
   }
 }

@@ -1,3 +1,12 @@
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import * as schema from "../../../db/schema.ts";
+import {
+  dishIngredients,
+  dishes,
+  ingredients,
+  inventoryItems,
+} from "../../../db/schema.ts";
+
 type SeedIngredient = {
   id: string;
   name: string;
@@ -94,39 +103,65 @@ function isoAfterDays(base: Date, days: number): string {
   return new Date(base.getTime() + days * 86_400_000).toISOString();
 }
 
-async function runBatches(db: D1Database, statements: D1PreparedStatement[]): Promise<void> {
-  for (let index = 0; index < statements.length; index += 50) {
-    await db.batch(statements.slice(index, index + 50));
-  }
-}
+type InsertExecutor = Pick<NodePgDatabase<typeof schema>, "insert">;
 
-export async function seedHousehold(db: D1Database, householdId: string): Promise<void> {
+export async function seedHousehold(db: InsertExecutor, householdId: string): Promise<void> {
   const now = new Date();
-  const statements: D1PreparedStatement[] = [];
+  const ingredientIds = new Map(seedIngredients.map((item) => [item.id, crypto.randomUUID()]));
+  const dishIds = new Map(seedDishes.map((dish) => [dish.id, crypto.randomUUID()]));
 
-  for (const item of seedIngredients) {
-    statements.push(db.prepare(
-      "INSERT INTO ingredients (id, household_id, name, category, default_unit, default_price, shelf_life_days, season_months, aliases) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]')",
-    ).bind(`${householdId}-${item.id}`, householdId, item.name, item.category, item.unit, item.price, item.shelfLife, JSON.stringify(item.months)));
-  }
+  await db.insert(ingredients).values(seedIngredients.map((item) => ({
+    id: ingredientIds.get(item.id)!,
+    householdId,
+    name: item.name,
+    category: item.category,
+    defaultUnit: item.unit,
+    defaultPrice: String(item.price),
+    shelfLifeDays: item.shelfLife,
+    seasonMonths: item.months,
+    aliases: [],
+  })));
 
-  for (const dish of seedDishes) {
-    const dishId = `${householdId}-${dish.id}`;
-    statements.push(db.prepare(
-      "INSERT INTO dishes (id, household_id, name, category, meal_types, cooking_time, difficulty, taste_tags, favorite_level, estimated_cost, seasonal, enabled, steps) VALUES (?, ?, ?, ?, ?, ?, '简单', ?, ?, ?, ?, 1, ?)",
-    ).bind(dishId, householdId, dish.name, dish.category, JSON.stringify(dish.mealTypes), dish.minutes, JSON.stringify(dish.tastes), dish.favorite, dish.cost, dish.seasonal ? 1 : 0, JSON.stringify(dish.steps)));
-    for (const [ingredientId, amount, unit] of dish.ingredients) {
-      statements.push(db.prepare(
-        "INSERT INTO dish_ingredients (id, household_id, dish_id, ingredient_id, amount, unit, required) VALUES (?, ?, ?, ?, ?, ?, 1)",
-      ).bind(`${dishId}-${ingredientId}`, householdId, dishId, `${householdId}-${ingredientId}`, amount, unit));
-    }
-  }
+  await db.insert(dishes).values(seedDishes.map((dish) => ({
+    id: dishIds.get(dish.id)!,
+    householdId,
+    name: dish.name,
+    category: dish.category,
+    mealTypes: dish.mealTypes as Array<"breakfast" | "lunch" | "dinner">,
+    baseServings: 2,
+    cookingTime: dish.minutes,
+    difficulty: "简单",
+    tasteTags: dish.tastes,
+    favoriteLevel: dish.favorite,
+    estimatedCost: String(dish.cost),
+    seasonal: dish.seasonal,
+    enabled: true,
+    steps: dish.steps,
+  })));
 
-  seedInventory.forEach(([ingredientId, amount, unit, expiresInDays], index) => {
-    statements.push(db.prepare(
-      "INSERT INTO inventory_items (id, household_id, ingredient_id, amount, unit, bought_at, expire_at, location, note) VALUES (?, ?, ?, ?, ?, ?, ?, 'fridge', '示例数据')",
-    ).bind(`${householdId}-inventory-${index + 1}`, householdId, `${householdId}-${ingredientId}`, amount, unit, now.toISOString(), isoAfterDays(now, expiresInDays)));
-  });
+  await db.insert(dishIngredients).values(seedDishes.flatMap((dish) =>
+    dish.ingredients.map(([ingredientId, amount, unit]) => ({
+      id: crypto.randomUUID(),
+      householdId,
+      dishId: dishIds.get(dish.id)!,
+      ingredientId: ingredientIds.get(ingredientId)!,
+      amount: String(amount),
+      unit,
+      required: true,
+    })),
+  ));
 
-  await runBatches(db, statements);
+  await db.insert(inventoryItems).values(seedInventory.map(
+    ([ingredientId, amount, unit, expiresInDays]) => ({
+      id: crypto.randomUUID(),
+      householdId,
+      ingredientId: ingredientIds.get(ingredientId)!,
+      amount: String(amount),
+      unit,
+      boughtAt: now,
+      expireAt: new Date(isoAfterDays(now, expiresInDays)),
+      location: "fridge",
+      note: "示例数据",
+    }),
+  ));
 }

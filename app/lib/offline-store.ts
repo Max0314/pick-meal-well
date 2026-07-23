@@ -1,10 +1,16 @@
 import type { KitchenSnapshot } from "./domain";
-import type { KitchenMutation } from "./server/repository";
+import type { KitchenMutation } from "./mutations";
 
-const DB_NAME = "haohao-meal-v1";
+const DB_NAME = "pick-meal-well";
+const DB_VERSION = 2;
 const SNAPSHOT_STORE = "snapshot";
 const MUTATION_STORE = "mutations";
 const SNAPSHOT_KEY = "latest";
+
+type MutationRecord = {
+  sequence?: number;
+  mutation: KitchenMutation;
+};
 
 export class RetryableSyncError extends Error {
   constructor(message = "网络暂时不可用") {
@@ -32,11 +38,19 @@ export async function flushQueue(
 function openDatabase(): Promise<IDBDatabase | null> {
   if (typeof indexedDB === "undefined") return Promise.resolve(null);
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const database = request.result;
-      if (!database.objectStoreNames.contains(SNAPSHOT_STORE)) database.createObjectStore(SNAPSHOT_STORE);
-      if (!database.objectStoreNames.contains(MUTATION_STORE)) database.createObjectStore(MUTATION_STORE, { keyPath: "id" });
+      if (!database.objectStoreNames.contains(SNAPSHOT_STORE)) {
+        database.createObjectStore(SNAPSHOT_STORE);
+      }
+      if (database.objectStoreNames.contains(MUTATION_STORE)) {
+        database.deleteObjectStore(MUTATION_STORE);
+      }
+      database.createObjectStore(MUTATION_STORE, {
+        keyPath: "sequence",
+        autoIncrement: true,
+      });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -77,7 +91,7 @@ export async function enqueueMutation(mutation: KitchenMutation): Promise<void> 
   const database = await openDatabase();
   if (!database) return;
   const transaction = database.transaction(MUTATION_STORE, "readwrite");
-  transaction.objectStore(MUTATION_STORE).put(mutation);
+  transaction.objectStore(MUTATION_STORE).add({ mutation } satisfies MutationRecord);
   await complete(transaction);
   database.close();
 }
@@ -88,7 +102,11 @@ export async function loadQueuedMutations(): Promise<KitchenMutation[]> {
   const transaction = database.transaction(MUTATION_STORE, "readonly");
   const request = transaction.objectStore(MUTATION_STORE).getAll();
   const value = await new Promise<KitchenMutation[]>((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result as KitchenMutation[]);
+    request.onsuccess = () => resolve(
+      (request.result as MutationRecord[])
+        .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
+        .map((record) => record.mutation),
+    );
     request.onerror = () => reject(request.error);
   });
   database.close();
@@ -101,7 +119,7 @@ async function replaceQueue(queue: KitchenMutation[]): Promise<void> {
   const transaction = database.transaction(MUTATION_STORE, "readwrite");
   const store = transaction.objectStore(MUTATION_STORE);
   store.clear();
-  queue.forEach((mutation) => store.put(mutation));
+  queue.forEach((mutation) => store.add({ mutation } satisfies MutationRecord));
   await complete(transaction);
   database.close();
 }
@@ -112,4 +130,17 @@ export async function flushMutationQueue(
   const result = await flushQueue(await loadQueuedMutations(), send);
   await replaceQueue(result.remaining);
   return result;
+}
+
+export async function clearLocalData(): Promise<void> {
+  const database = await openDatabase();
+  if (!database) return;
+  const transaction = database.transaction(
+    [SNAPSHOT_STORE, MUTATION_STORE],
+    "readwrite",
+  );
+  transaction.objectStore(SNAPSHOT_STORE).clear();
+  transaction.objectStore(MUTATION_STORE).clear();
+  await complete(transaction);
+  database.close();
 }

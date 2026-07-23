@@ -1,0 +1,147 @@
+name: fribench
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-app-secrets: &app-secrets
+  - database_url
+  - redis_url
+  - setup_token
+
+services:
+  postgres:
+    image: postgres:17.10-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pick_meal_well
+      POSTGRES_USER: pick_meal_well_owner
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_owner_password
+    secrets:
+      - postgres_owner_password
+      - postgres_app_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./ops/postgres/init-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+      - ./ops/postgres/grant-app-role.sql:/docker-entrypoint-initdb.d/20-grant-app-role.sql:ro
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pick_meal_well_owner -d pick_meal_well"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  redis:
+    image: redis:8.4.4
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -ec
+      - exec redis-server --appendonly yes --requirepass "$$(cat /run/secrets/redis_password)"
+    secrets:
+      - redis_password
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/redis_password)\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  migrate:
+    build:
+      context: .
+      target: migrator
+    restart: "no"
+    environment:
+      DATABASE_URL_FILE: /run/secrets/migration_database_url
+    secrets:
+      - migration_database_url
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    env_file:
+      - /srv/fribench/ops/pick-meal-well.env
+    environment:
+      DATABASE_URL_FILE: /run/secrets/database_url
+      REDIS_URL_FILE: /run/secrets/redis_url
+      SETUP_TOKEN_FILE: /run/secrets/setup_token
+    secrets: *app-secrets
+    networks:
+      - backend
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/api/health/live').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+networks:
+  backend:
+    name: fribench-backend
+    internal: true
+
+volumes:
+  postgres_data:
+    name: fribench-pick-meal-well-postgres-v1
+  redis_data:
+    name: fribench-pick-meal-well-redis-v1
+
+secrets:
+  database_url:
+    file: /etc/fribench/database_url
+  migration_database_url:
+    file: /etc/fribench/migration_database_url
+  postgres_owner_password:
+    file: /etc/fribench/postgres_owner_password
+  postgres_app_password:
+    file: /etc/fribench/postgres_app_password
+  redis_url:
+    file: /etc/fribench/redis_url
+  redis_password:
+    file: /etc/fribench/redis_password
+  setup_token:
+    file: /etc/fribench/setup_token

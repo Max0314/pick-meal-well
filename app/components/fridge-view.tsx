@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { InventoryItem, KitchenSnapshot } from "../lib/domain";
-import type { InventoryInput } from "../lib/server/repository";
+import type { InventoryInput } from "../lib/mutations";
 
 export function FridgeView({ snapshot, onAdd, onConsume }: {
   snapshot: KitchenSnapshot;

@@ -654,6 +654,26 @@ button:disabled {
   margin-top: 14px;
 }
 
+.reset-card h2,
+.reset-card p {
+  margin: 0;
+}
+
+.reset-card p {
+  color: var(--olive-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.reset-card .secondary-actions button {
+  border-color: var(--line);
+  color: var(--olive);
+}
+
+.reset-card .secondary-actions .danger-action {
+  color: var(--tomato);
+}
+
 .profile-actions {
   margin-top: 14px;
 }

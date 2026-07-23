@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { KitchenMutation } from "../app/lib/server/repository.ts";
+import type { KitchenMutation } from "../app/lib/mutations.ts";
 import { flushQueue, RetryableSyncError } from "../app/lib/offline-store.ts";
 
 function mutation(id: string): KitchenMutation {
-  return { id, type: "inventory.consume", payload: { id: `inventory-${id}` } };
+  return {
+    id,
+    dataEpoch: "019f8e32-b013-7000-8000-000000000010",
+    type: "inventory.consume",
+    payload: { id: `inventory-${id}` },
+  };
 }
 
 test("flushes queued mutations in order", async () => {

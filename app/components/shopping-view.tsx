@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { KitchenSnapshot } from "../lib/domain";
-import type { ShoppingInput } from "../lib/server/repository";
+import type { ShoppingInput } from "../lib/mutations";
 
 export function ShoppingView({ snapshot, onAdd, onToggle, onStock }: {
   snapshot: KitchenSnapshot;

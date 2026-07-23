@@ -12,16 +12,39 @@ function daysBetween(from: Date, to: Date): number {
   return Math.ceil((to.getTime() - from.getTime()) / DAY_MS);
 }
 
+function requiredAmount(ingredient: DishIngredient, dish: Dish, people: number): number {
+  return ingredient.amount * (people / dish.baseServings);
+}
+
+function availableAmount(
+  inventory: InventoryItem[],
+  ingredient: DishIngredient,
+): number {
+  return inventory
+    .filter(
+    (item) =>
+      item.ingredientId === ingredient.ingredientId &&
+        item.unit === ingredient.unit,
+    )
+    .reduce((sum, item) => sum + item.amount, 0);
+}
+
 function inventoryForIngredient(
   inventory: InventoryItem[],
   ingredient: DishIngredient,
+  dish: Dish,
+  people: number,
 ): InventoryItem | undefined {
-  return inventory.find(
-    (item) =>
-      item.ingredientId === ingredient.ingredientId &&
-      item.unit === ingredient.unit &&
-      item.amount >= ingredient.amount,
-  );
+  if (availableAmount(inventory, ingredient) < requiredAmount(ingredient, dish, people)) {
+    return undefined;
+  }
+  return inventory
+    .filter(
+      (item) =>
+        item.ingredientId === ingredient.ingredientId &&
+        item.unit === ingredient.unit,
+    )
+    .sort((a, b) => new Date(a.expireAt).getTime() - new Date(b.expireAt).getTime())[0];
 }
 
 function expiryBonus(
@@ -32,7 +55,7 @@ function expiryBonus(
   let best: { score: number; item: InventoryItem; days: number } | null = null;
 
   for (const ingredient of dish.ingredients) {
-    const item = inventoryForIngredient(input.inventory, ingredient);
+    const item = inventoryForIngredient(input.inventory, ingredient, dish, input.people);
     if (!item) continue;
     const days = daysBetween(now, new Date(item.expireAt));
     const score = days <= 1 ? 25 : days === 2 ? 18 : days === 3 ? 10 : 0;
@@ -84,9 +107,11 @@ function buildReason(
 
 function scoreDish(dish: Dish, input: RecommendationInput): Recommendation {
   const required = dish.ingredients.filter((ingredient) => ingredient.required);
-  const missing = required.filter(
-    (ingredient) => !inventoryForIngredient(input.inventory, ingredient),
-  );
+  const missing = required.flatMap((ingredient) => {
+    const needed = requiredAmount(ingredient, dish, input.people);
+    const absent = Math.max(0, needed - availableAmount(input.inventory, ingredient));
+    return absent > 0 ? [{ ...ingredient, amount: Number(absent.toFixed(2)) }] : [];
+  });
   const coverage = required.length === 0 ? 1 : (required.length - missing.length) / required.length;
   const expiry = expiryBonus(dish, input);
   const favorite = Math.max(0, Math.min(5, dish.favoriteLevel)) * 3;
@@ -113,7 +138,7 @@ function scoreDish(dish: Dish, input: RecommendationInput): Recommendation {
     availability: missing.length === 0 ? "ready" : missing.length === 1 ? "one-missing" : "shopping",
     inventoryCoverage: Number(coverage.toFixed(2)),
     missingIngredients: missing,
-    estimatedCost: dish.estimatedCost,
+    estimatedCost: Number((dish.estimatedCost * (input.people / dish.baseServings)).toFixed(2)),
   };
 }
 

@@ -15,7 +15,7 @@ export function RecipesView({ snapshot, onSave, onDisable }: {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!name.trim() || !ingredient) return;
-    await onSave({ id: crypto.randomUUID(), name: name.trim(), category: "家常菜", enabled: true, mealTypes: ["lunch", "dinner"] as MealType[], cookingTime: minutes, tasteTags: ["下饭"], favoriteLevel: 3, lastCookedAt: null, estimatedCost: 10, seasonal: false, steps: ["按自己的习惯完成这道菜。"], ingredients: [{ ingredientId, name: ingredient.name, amount: 1, unit: ingredient.defaultUnit, required: true }] });
+    await onSave({ id: crypto.randomUUID(), name: name.trim(), category: "家常菜", enabled: true, mealTypes: ["lunch", "dinner"] as MealType[], baseServings: 2, cookingTime: minutes, tasteTags: ["下饭"], favoriteLevel: 3, lastCookedAt: null, estimatedCost: 10, seasonal: false, steps: ["按自己的习惯完成这道菜。"], ingredients: [{ ingredientId, name: ingredient.name, amount: 1, unit: ingredient.defaultUnit, required: true }] });
     setName(""); setOpen(false);
   }
 

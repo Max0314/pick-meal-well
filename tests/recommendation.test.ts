@@ -14,6 +14,7 @@ const tomatoEggDish: Dish = {
   favoriteLevel: 4,
   lastCookedAt: null,
   estimatedCost: 11.8,
+  baseServings: 2,
   seasonal: true,
   steps: ["番茄切块，鸡蛋打散。", "先炒鸡蛋，再下番茄。", "生菜快速蒜蓉翻炒。"],
   ingredients: [
@@ -34,6 +35,7 @@ const tofuDish: Dish = {
   favoriteLevel: 4,
   lastCookedAt: null,
   estimatedCost: 10,
+  baseServings: 2,
   seasonal: false,
   steps: ["豆腐切块。", "小火煎香后调味。"],
   ingredients: [
@@ -52,6 +54,7 @@ const inventory: InventoryItem[] = [
 function input(overrides: Partial<RecommendationInput> = {}): RecommendationInput {
   return {
     mealType: "dinner",
+    people: 2,
     maxMinutes: 30,
     taste: "下饭",
     now: "2026-07-10T10:00:00.000Z",
@@ -115,4 +118,20 @@ test("applies a temporary dislike to matching taste tags", () => {
     activeDislikes: [{ tag: "下饭", expiresAt: "2026-07-17T00:00:00.000Z" }],
   }));
   assert.equal(result?.dish.id, lightDish.id);
+});
+
+test("scales ingredient needs and cost to the selected household size", () => {
+  const result = recommendNextMeal(input({
+    people: 4,
+    dishes: [tomatoEggDish],
+    inventory: [
+      { id: "egg-a", ingredientId: "egg", name: "鸡蛋", amount: 3, unit: "个", expireAt: "2026-07-24T00:00:00.000Z" },
+      { id: "egg-b", ingredientId: "egg", name: "鸡蛋", amount: 3, unit: "个", expireAt: "2026-07-25T00:00:00.000Z" },
+      { id: "tomato", ingredientId: "tomato", name: "番茄", amount: 4, unit: "个", expireAt: "2026-07-24T00:00:00.000Z" },
+      { id: "lettuce", ingredientId: "lettuce", name: "生菜", amount: 1, unit: "颗", expireAt: "2026-07-24T00:00:00.000Z" },
+    ],
+  }));
+  assert.equal(result?.estimatedCost, 23.6);
+  assert.equal(result?.missingIngredients[0]?.name, "生菜");
+  assert.equal(result?.missingIngredients[0]?.amount, 1);
 });

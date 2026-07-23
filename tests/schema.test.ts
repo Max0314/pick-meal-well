@@ -19,6 +19,13 @@ test("exports every household-scoped table", () => {
   }
 });
 
+test("uses PostgreSQL-native household and serving columns", () => {
+  assert.ok(schema.households.instanceKey);
+  assert.ok(schema.households.dataEpoch);
+  assert.ok(schema.households.passcodeHash);
+  assert.ok(schema.dishes.baseServings);
+});
+
 test("ships a useful but restrained two-person starter kitchen", () => {
   assert.equal(seedDishes.length, 20);
   assert.ok(seedIngredients.length >= 30);

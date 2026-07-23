@@ -1,5 +1,5 @@
 import type { KitchenSnapshot, MealType, Recommendation } from "./domain";
-import type { KitchenMutation } from "./server/repository";
+import type { KitchenMutation } from "./mutations";
 
 export type BootstrapResponse = {
   claimed: boolean;
@@ -42,8 +42,11 @@ export function getBootstrap(): Promise<BootstrapResponse> {
   return requestJson("/api/bootstrap");
 }
 
-export function claimHousehold(name: string, passcode: string): Promise<{ ok: true }> {
-  return requestJson("/api/auth/claim", { method: "POST", body: JSON.stringify({ name, passcode }) });
+export function claimHousehold(name: string, passcode: string, setupToken: string): Promise<{ ok: true }> {
+  return requestJson("/api/auth/claim", {
+    method: "POST",
+    body: JSON.stringify({ name, passcode, setupToken }),
+  });
 }
 
 export function loginHousehold(passcode: string): Promise<{ ok: true }> {
@@ -56,6 +59,7 @@ export function logoutHousehold(): Promise<{ ok: true }> {
 
 export function getRecommendation(input: {
   mealType: MealType;
+  people: number;
   maxMinutes: number;
   taste: string;
   excludedDishIds: string[];
@@ -65,4 +69,14 @@ export function getRecommendation(input: {
 
 export function sendMutation(mutation: KitchenMutation): Promise<{ applied: boolean; snapshot: KitchenSnapshot }> {
   return requestJson("/api/mutations", { method: "POST", body: JSON.stringify(mutation) });
+}
+
+export function resetHousehold(passcode: string, confirmation: string): Promise<{
+  ok: true;
+  snapshot: KitchenSnapshot;
+}> {
+  return requestJson("/api/household/reset", {
+    method: "POST",
+    body: JSON.stringify({ passcode, confirmation }),
+  });
 }

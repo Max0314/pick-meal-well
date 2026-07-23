@@ -7,11 +7,13 @@ import { ProfileView } from "./components/profile-view";
 import { RecipesView } from "./components/recipes-view";
 import { ShoppingView } from "./components/shopping-view";
 import {
+  ApiError,
   claimHousehold,
   getBootstrap,
   getRecommendation,
   loginHousehold,
   logoutHousehold,
+  resetHousehold,
   sendMutation,
   type BootstrapResponse,
 } from "./lib/client-api";
@@ -19,12 +21,18 @@ import type { Dish, HouseholdSettings, KitchenSnapshot, MealType, Recommendation
 import {
   enqueueMutation,
   flushMutationQueue,
+  clearLocalData,
   loadCachedSnapshot,
   loadQueuedMutations,
   RetryableSyncError,
   saveCachedSnapshot,
 } from "./lib/offline-store";
-import type { InventoryInput, KitchenMutation, ShoppingInput } from "./lib/server/repository";
+import type {
+  InventoryInput,
+  KitchenMutation,
+  KitchenMutationDraft,
+  ShoppingInput,
+} from "./lib/mutations";
 
 type Tab = "home" | "fridge" | "recipes" | "shopping" | "profile";
 const tabs: Array<{ id: Tab; icon: string; label: string }> = [
@@ -37,25 +45,32 @@ const tabs: Array<{ id: Tab; icon: string; label: string }> = [
 
 function mealFromTime(): MealType {
   const hour = new Date().getHours();
+  if (hour < 10) return "breakfast";
   return hour >= 14 ? "dinner" : "lunch";
 }
 
 function AuthGate({ claimed, onSuccess }: { claimed: boolean; onSuccess: () => Promise<void> }) {
   const [name, setName] = useState("我们家");
   const [passcode, setPasscode] = useState("");
+  const [setupToken, setSetupToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
-    try { if (claimed) await loginHousehold(passcode); else await claimHousehold(name, passcode); await onSuccess(); }
+    try { if (claimed) await loginHousehold(passcode); else await claimHousehold(name, passcode, setupToken); await onSuccess(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "暂时无法进入，请重试"); }
     finally { setBusy(false); }
   }
-  return <main className="app-shell auth-shell"><div className="auth-brand"><p className="brand">好好吃饭</p><span>家庭下一顿决策助手</span></div><div className="auth-copy"><p>{claimed ? "欢迎回来" : "先认领你们家的厨房"}</p><h1>{claimed ? "下一顿，别再纠结了。" : "以后，打开就有答案。"}</h1><span>{claimed ? "输入家庭共享口令，继续查看同一套菜谱和冰箱。" : "创建后会预置 20 道两人份家常菜，家人用同一口令进入。"}</span></div><form className="auth-card" onSubmit={submit}>{claimed ? null : <label>家庭名称<input value={name} maxLength={40} onChange={(event) => setName(event.target.value)} /></label>}<label>家庭共享口令<input type="password" autoComplete={claimed ? "current-password" : "new-password"} minLength={8} value={passcode} onChange={(event) => setPasscode(event.target.value)} placeholder="至少 8 个字符" /></label>{error ? <p className="form-error" role="alert">{error}</p> : null}<button className="primary-action" disabled={busy} type="submit">{busy ? "请稍候…" : claimed ? "进入家庭厨房" : "创建并进入"}</button></form><p className="privacy-note">公开网址，家庭数据仅在口令验证后返回。</p></main>;
+  return <main className="app-shell auth-shell"><div className="auth-brand"><p className="brand">好好吃饭</p><span>家庭下一顿决策助手</span></div><div className="auth-copy"><p>{claimed ? "欢迎回来" : "先认领你们家的厨房"}</p><h1>{claimed ? "下一顿，别再纠结了。" : "以后，打开就有答案。"}</h1><span>{claimed ? "输入家庭共享口令，继续查看同一套菜谱和冰箱。" : "创建后会预置 20 道两人份家常菜，家人用同一口令进入。"}</span></div><form className="auth-card" onSubmit={submit}>{claimed ? null : <><label>家庭名称<input value={name} maxLength={40} onChange={(event) => setName(event.target.value)} /></label><label>服务器初始化令牌<input type="password" autoComplete="off" value={setupToken} onChange={(event) => setSetupToken(event.target.value)} placeholder="由服务器管理员提供" /></label></>}<label>家庭共享口令<input type="password" autoComplete={claimed ? "current-password" : "new-password"} minLength={10} value={passcode} onChange={(event) => setPasscode(event.target.value)} placeholder="至少 10 个字符" /></label>{error ? <p className="form-error" role="alert">{error}</p> : null}<button className="primary-action" disabled={busy} type="submit">{busy ? "请稍候…" : claimed ? "进入家庭厨房" : "创建并进入"}</button></form><p className="privacy-note">公开网址，家庭数据仅在口令验证后返回。</p></main>;
 }
 
 function LoadingScreen() {
   return <main className="app-shell loading-shell"><p className="brand">好好吃饭</p><div><p className="decision-kicker">下一顿 · 正在准备</p><h1>先别纠结，马上给你一个答案。</h1><span>正在连接家庭厨房…</span></div></main>;
+}
+
+function retryableRequest(reason: unknown): boolean {
+  return reason instanceof TypeError ||
+    (reason instanceof ApiError && reason.status >= 500);
 }
 
 export function KitchenApp() {
@@ -124,7 +139,7 @@ export function KitchenApp() {
             setSnapshot(response.snapshot);
             return response;
           } catch (reason) {
-            if (reason instanceof TypeError) throw new RetryableSyncError();
+            if (retryableRequest(reason)) throw new RetryableSyncError();
             throw reason;
           }
         });
@@ -145,22 +160,24 @@ export function KitchenApp() {
   useEffect(() => {
     if (!snapshot || tab !== "home" || !refreshingRecommendation) return;
     let active = true;
-    getRecommendation({ mealType, maxMinutes, taste, excludedDishIds })
+    getRecommendation({ mealType, people, maxMinutes, taste, excludedDishIds })
       .then((result) => { if (active) { setRecommendation(result.recommendation); setRefreshingRecommendation(false); } })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "推荐失败"); })
       .finally(() => { if (active) setRefreshingRecommendation(false); });
     return () => { active = false; };
-  }, [snapshot, mealType, maxMinutes, taste, excludedDishIds, tab, refreshingRecommendation]);
+  }, [snapshot, mealType, people, maxMinutes, taste, excludedDishIds, tab, refreshingRecommendation]);
 
-  async function mutate(mutation: KitchenMutation): Promise<KitchenSnapshot> {
+  async function mutate(mutation: KitchenMutationDraft): Promise<KitchenSnapshot> {
     setError("");
+    if (!snapshot) throw new Error("家庭数据尚未加载");
+    const command = { ...mutation, dataEpoch: snapshot.dataEpoch } as KitchenMutation;
     try {
-      const result = await sendMutation(mutation);
+      const result = await sendMutation(command);
       setSnapshot(result.snapshot);
       return result.snapshot;
     } catch (reason) {
-      if (!navigator.onLine || reason instanceof TypeError) {
-        await enqueueMutation(mutation);
+      if (!navigator.onLine || retryableRequest(reason)) {
+        await enqueueMutation(command);
         setOnline(false); setPendingCount((count) => count + 1); setNotice("离线修改已保存，联网后会自动同步。");
         if (snapshot) return snapshot;
       }
@@ -172,10 +189,7 @@ export function KitchenApp() {
     if (!recommendation) return;
     setBusy(true);
     try {
-      await mutate({ id: crypto.randomUUID(), type: "decision.accept", payload: { dishId: recommendation.dish.id, mealType, estimatedCost: recommendation.estimatedCost } });
-      for (const ingredient of recommendation.missingIngredients) {
-        await mutate({ id: crypto.randomUUID(), type: "shopping.add", payload: { id: crypto.randomUUID(), ingredientId: ingredient.ingredientId, amount: ingredient.amount, unit: ingredient.unit, source: "dish" } });
-      }
+      await mutate({ id: crypto.randomUUID(), type: "meal.accept", payload: { dishId: recommendation.dish.id, mealType, people } });
       setAccepted(true); setNotice(recommendation.missingIngredients.length ? "已经决定，并把缺少食材加入采购。" : "已经决定，这顿可以直接开火。" );
     } catch (reason) { setError(reason instanceof Error ? reason.message : "保存失败"); }
     finally { setBusy(false); }
@@ -193,11 +207,11 @@ export function KitchenApp() {
 
   function renderContent() {
     if (!snapshot) return null;
-    if (tab === "home") return <DecisionHome snapshot={snapshot} recommendation={recommendation} mealType={mealType} people={people} maxMinutes={maxMinutes} taste={taste} busy={busy || refreshingRecommendation} accepted={accepted} onMealType={(value) => { setMealType(value); setRefreshingRecommendation(true); setAccepted(false); setExcludedDishIds([]); }} onPeople={setPeople} onMaxMinutes={(value) => { setMaxMinutes(value); setRefreshingRecommendation(true); }} onTaste={(value) => { setTaste(value); setRefreshingRecommendation(true); }} onAccept={acceptRecommendation} onSwap={() => { if (recommendation) { setRefreshingRecommendation(true); setExcludedDishIds((items) => [...items, recommendation.dish.id]); } setAccepted(false); }} onDislike={dislikeRecommendation} />;
+    if (tab === "home") return <DecisionHome snapshot={snapshot} recommendation={recommendation} mealType={mealType} people={people} maxMinutes={maxMinutes} taste={taste} busy={busy || refreshingRecommendation} accepted={accepted} onMealType={(value) => { setMealType(value); setRefreshingRecommendation(true); setAccepted(false); setExcludedDishIds([]); }} onPeople={(value) => { setPeople(value); setRefreshingRecommendation(true); }} onMaxMinutes={(value) => { setMaxMinutes(value); setRefreshingRecommendation(true); }} onTaste={(value) => { setTaste(value); setRefreshingRecommendation(true); }} onAccept={acceptRecommendation} onSwap={() => { if (recommendation) { setRefreshingRecommendation(true); setExcludedDishIds((items) => [...items, recommendation.dish.id]); } setAccepted(false); }} onDislike={dislikeRecommendation} />;
     if (tab === "fridge") return <FridgeView snapshot={snapshot} onAdd={(payload: InventoryInput) => mutate({ id: crypto.randomUUID(), type: "inventory.upsert", payload }).then(() => undefined)} onConsume={(id) => mutate({ id: crypto.randomUUID(), type: "inventory.consume", payload: { id } }).then(() => undefined)} />;
     if (tab === "recipes") return <RecipesView snapshot={snapshot} onSave={(payload: Dish) => mutate({ id: crypto.randomUUID(), type: "dish.upsert", payload }).then(() => undefined)} onDisable={(id) => mutate({ id: crypto.randomUUID(), type: "dish.disable", payload: { id } }).then(() => undefined)} />;
     if (tab === "shopping") return <ShoppingView snapshot={snapshot} onAdd={(payload: ShoppingInput) => mutate({ id: crypto.randomUUID(), type: "shopping.add", payload }).then(() => undefined)} onToggle={(id, checked) => mutate({ id: crypto.randomUUID(), type: "shopping.toggle", payload: { id, checked } }).then(() => undefined)} onStock={(ids) => mutate({ id: crypto.randomUUID(), type: "shopping.stock", payload: { ids } }).then(() => undefined)} />;
-    return <ProfileView snapshot={snapshot} onSettings={(payload: HouseholdSettings) => mutate({ id: crypto.randomUUID(), type: "settings.update", payload }).then(() => undefined)} onReset={() => mutate({ id: crypto.randomUUID(), type: "demo.clear", payload: {} }).then(() => undefined)} onLogout={async () => { await logoutHousehold(); setSnapshot(null); await refreshBootstrap(); }} />;
+    return <ProfileView snapshot={snapshot} onSettings={(payload: HouseholdSettings) => mutate({ id: crypto.randomUUID(), type: "settings.update", payload }).then(() => undefined)} onReset={async (passcode, confirmation) => { const result = await resetHousehold(passcode, confirmation); await clearLocalData(); setPendingCount(0); setSnapshot(result.snapshot); setRecommendation(null); setExcludedDishIds([]); setAccepted(false); setRefreshingRecommendation(true); setNotice("已恢复初始示例数据。"); }} onLogout={async () => { if (pendingCount > 0 && !window.confirm("仍有离线修改未同步，退出会放弃这些修改。仍要退出吗？")) return; await logoutHousehold(); await clearLocalData(); setPendingCount(0); setSnapshot(null); await refreshBootstrap(); }} />;
   }
 
   if (!bootstrap) return <>{error ? <div className="global-error">{error}</div> : null}<LoadingScreen /></>;

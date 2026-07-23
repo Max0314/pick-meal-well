@@ -1,13 +1,30 @@
-import { env } from "cloudflare:workers";
-import { ensureDatabase } from "../../../db/bootstrap";
 import { getOptionalHouseholdSession } from "../../lib/auth/session";
-import { getHouseholdSnapshot } from "../../lib/server/repository";
+import {
+  getHouseholdSnapshot,
+  getSingletonHousehold,
+} from "../../lib/server/repository";
+import { cacheSnapshot, getCachedSnapshot } from "../../lib/server/redis";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
-  await ensureDatabase(env.DB);
-  const claimed = Boolean(await env.DB.prepare("SELECT id FROM households LIMIT 1").first());
-  const session = await getOptionalHouseholdSession();
-  if (!session) return Response.json({ claimed, authenticated: false, snapshot: null });
-  const snapshot = await getHouseholdSnapshot(env.DB, session.householdId);
-  return Response.json({ claimed, authenticated: true, snapshot });
+  const [household, session] = await Promise.all([
+    getSingletonHousehold(),
+    getOptionalHouseholdSession(),
+  ]);
+  if (!session) {
+    return Response.json(
+      { claimed: Boolean(household), authenticated: false, snapshot: null },
+      { headers: { "cache-control": "no-store" } },
+    );
+  }
+  let snapshot = await getCachedSnapshot(session.householdId);
+  if (!snapshot) {
+    snapshot = await getHouseholdSnapshot(session.householdId);
+    await cacheSnapshot(session.householdId, snapshot);
+  }
+  return Response.json(
+    { claimed: true, authenticated: true, snapshot },
+    { headers: { "cache-control": "no-store" } },
+  );
 }

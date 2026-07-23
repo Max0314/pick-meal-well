@@ -19,6 +19,7 @@ export type Dish = {
   favoriteLevel: number;
   lastCookedAt: string | null;
   estimatedCost: number;
+  baseServings: number;
   seasonal: boolean;
   steps: string[];
   ingredients: DishIngredient[];
@@ -48,6 +49,7 @@ export type ActiveDislike = {
 
 export type RecommendationInput = {
   mealType: MealType;
+  people: number;
   maxMinutes: number;
   taste: string;
   now: string;
@@ -92,11 +94,12 @@ export type ShoppingItem = {
 export type KitchenStats = {
   weeklyCost: number;
   acceptedMeals: number;
-  wasteCount: number;
+  inventoryCount: number;
   lowCostFavorite: string | null;
 };
 
 export type KitchenSnapshot = {
+  dataEpoch: string;
   household: HouseholdSettings;
   ingredients: Array<{ id: string; name: string; category: string; defaultUnit: string }>;
   dishes: Dish[];

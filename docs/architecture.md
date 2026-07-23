@@ -1,27 +1,41 @@
 # 架构
 
-## 产品边界
+## 决策
 
-Pick Meal Well 是一个移动优先的家庭下一顿决策助手。它根据家庭菜谱、冰箱库存、临期食材、人数、可用时间和口味，给出一个可立即执行的推荐，并将缺失食材联动到采购清单。
+前端和业务 API 保持在同一个 Next.js standalone 容器，PostgreSQL 与 Redis 使用独立容器。当前家庭规模下，单独拆出前端容器和 API 容器会增加跨域、会话、发布顺序与监控成本，却没有独立扩缩容收益。Next.js 在这里承担 BFF：浏览器只访问一个同源入口，业务数据始终经由服务端 API。
 
-## 运行结构
+```mermaid
+flowchart LR
+  B["手机 / 浏览器"] --> N["宿主机 Nginx\n127.0.0.1:8080"]
+  N --> A["Next.js standalone\n127.0.0.1:3000"]
+  A --> P[("PostgreSQL 17\n业务事实源")]
+  A --> R[("Redis 8\n限流 / 60 秒快照")]
+  A --> C["HttpOnly Cookie\nIndexedDB 离线队列"]
+```
 
-- `app/`：vinext App Router 页面、组件和 API 路由。
-- `app/kitchen-app.tsx`：客户端状态协调、离线恢复、推荐筛选和底部导航。
-- `app/components/`：首页决策、冰箱、菜谱、采购和个人设置视图。
-- `app/api/`：bootstrap、推荐、变更与共享口令认证接口。
-- `app/lib/server/`：家庭范围的 D1 查询、变更验证、示例数据和推荐计算。
-- `app/lib/auth/`：口令摘要、session token 与 Cookie 会话。
-- `app/lib/offline-store.ts`：最近快照和待同步变更队列。
-- `db/schema.ts` 与 `drizzle/`：D1 数据模型和可部署迁移。
+只有应用容器映射到宿主机回环地址；PostgreSQL 与 Redis 不发布端口，三者只在 `fribench-backend` 内部网络通信。
+
+## 代码边界
+
+- `app/`：App Router 页面、组件和 API 路由。
+- `app/lib/mutations.ts`：客户端和服务端共享的 Zod mutation 协议。
+- `app/lib/server/repository.ts`：家庭范围查询、短事务、幂等回执和原子业务写入。
+- `app/lib/server/redis.ts`：登录限流与可失效快照缓存。
+- `app/lib/auth/`：Argon2id 口令、随机 session token 与 Cookie 会话。
+- `app/lib/offline-store.ts`：最近快照和按自增序号重放的待同步队列。
+- `db/schema.ts` 与 `drizzle/`：PostgreSQL 模式及可审查迁移。
+- `compose.prod.yml`、`Dockerfile` 与 `ops/`：正式运行、Nginx、备份和 systemd 资产。
 
 ## 数据与安全边界
 
-每一条业务数据均按 household ID 隔离。客户端只通过 API 获取已认证家庭的数据；共享口令只以摘要形式保存；session token 只以摘要形式保存并通过 HttpOnly Cookie 传递。客户端离线时只能缓存最近快照和待同步变更，不能绕过服务器的家庭范围校验。
+PostgreSQL 是唯一业务事实源；Redis 丢失时只影响缓存和限流可用性，不丢家庭数据。所有业务表均带 `household_id`，关系表使用复合外键防止跨家庭引用。共享口令只保存 Argon2id 哈希，session token 只保存 SHA-256 摘要。
 
-## 关键流程
+首次认领同时要求 `/etc/fribench/setup_token` 中的服务器初始化令牌，避免公开空实例被抢占。所有 JSON 写请求限制为 32 KiB、校验同源、使用严格 Zod 模式；登录和重置通过 Redis 限流。
 
-1. 首次用户提交家庭名称与共享口令，服务端创建家庭、示例数据和 session。
-2. 已认证客户端读取 bootstrap 快照，按参数请求单一推荐。
-3. 接受推荐、采购、库存和菜谱改动经过 mutation API 写入 D1；离线时先进入本地队列，联网后顺序重放。
-4. 公开部署不等于公开家庭数据；家庭数据仍需共享口令验证后才返回。
+## 关键一致性流程
+
+1. 客户端为每个 mutation 生成 UUID；离线时按创建顺序保存。
+2. 服务端在 PostgreSQL 同一事务中写入 `(household_id, mutation_id)` 回执、执行业务写入并递增版本。
+3. 重复重放命中回执后不再执行；失败事务不会留下回执。
+4. “接受推荐”由服务端重新读取菜谱、份数和库存，在一个事务内记录决定并把缺口合并进采购清单，客户端不能提交成本或缺口结论。
+5. 家庭重置会轮换 `data_epoch`；其他设备旧纪元的离线 mutation 返回 409，不会污染重置后的数据。

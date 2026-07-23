@@ -5,14 +5,14 @@
 ## 分支
 
 - 可直接进入 `main`：错别字、纯文档澄清、无行为变化的样式调整。
-- 必须使用 `codex/<topic>` 分支：功能、认证、家庭数据、D1 模式/迁移、离线同步、依赖升级和公开部署。
+- 必须使用 `codex/<topic>` 分支：功能、认证、家庭数据、PostgreSQL/Redis 模式或迁移、离线同步、依赖升级和公开部署。
 - 分支完成后可自审 PR，也可直接合并；合并前必须通过 `npm run verify`。
 
 ## 提交
 
 - 使用简短前缀：`feat:`、`fix:`、`docs:`、`test:`、`ci:`、`chore:`。
 - 一次提交只表达一个可回滚意图；不要把重构、功能和格式化混在一起。
-- 不提交 `.env`、口令、session token、Webhook URL、API token、D1 导出或用户家庭数据。
+- 不提交 `.env`、口令、session token、Webhook URL、API token、数据库/Redis 连接串、备份或用户家庭数据。
 
 ## 任务与 Issue 同步
 
@@ -27,4 +27,4 @@ npm run verify
 git diff --check
 ```
 
-涉及界面时还需验证一个真实交互和手机尺寸；涉及 D1 时还需审查 `drizzle/` 迁移；涉及部署时还需检查 `docs/deployment.md` 的 Secret 与数据影响说明。
+涉及界面时还需验证一个真实交互和手机尺寸；涉及 PostgreSQL 时还需审查 `drizzle/` 迁移；涉及部署时还需检查 `docs/deployment.md` 的 Secret、备份与数据影响说明。

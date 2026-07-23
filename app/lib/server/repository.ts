@@ -1,274 +1,585 @@
-import { ensureDatabase } from "../../../db/bootstrap.ts";
+import "server-only";
+
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { getDb } from "../../../db";
+import {
+  dishIngredients,
+  dishes,
+  households,
+  ingredients,
+  inventoryItems,
+  mealDecisions,
+  mutationReceipts,
+  shoppingItems,
+} from "../../../db/schema";
 import type {
   Dish,
-  HouseholdSettings,
   InventoryItem,
   KitchenSnapshot,
-  MealType,
   ShoppingItem,
 } from "../domain";
-import { seedHousehold } from "./seed.ts";
+import type { KitchenMutation } from "../mutations";
+import { seedHousehold } from "./seed";
 
-export type InventoryInput = Omit<InventoryItem, "name"> & { note?: string };
-export type ShoppingInput = Omit<ShoppingItem, "name" | "checked">;
-export type DishInput = Dish;
+const DAY_MS = 86_400_000;
 
-export type KitchenMutation =
-  | { id: string; type: "inventory.upsert"; payload: InventoryInput }
-  | { id: string; type: "inventory.consume"; payload: { id: string } }
-  | { id: string; type: "dish.upsert"; payload: DishInput }
-  | { id: string; type: "dish.disable"; payload: { id: string } }
-  | { id: string; type: "shopping.add"; payload: ShoppingInput }
-  | { id: string; type: "shopping.toggle"; payload: { id: string; checked: boolean } }
-  | { id: string; type: "shopping.stock"; payload: { ids: string[] } }
-  | { id: string; type: "decision.accept"; payload: { dishId: string; mealType: MealType; estimatedCost: number } }
-  | { id: string; type: "decision.dislike"; payload: { dishId?: string; mealType: MealType; tag: string } }
-  | { id: string; type: "settings.update"; payload: HouseholdSettings }
-  | { id: string; type: "demo.clear"; payload: Record<string, never> };
-
-const allowedMutationTypes = new Set<KitchenMutation["type"]>([
-  "inventory.upsert", "inventory.consume", "dish.upsert", "dish.disable",
-  "shopping.add", "shopping.toggle", "shopping.stock", "decision.accept",
-  "decision.dislike", "settings.update", "demo.clear",
-]);
-
-export function validateKitchenMutation(value: unknown): KitchenMutation {
-  if (!value || typeof value !== "object") throw new Error("变更内容无效");
-  const candidate = value as { id?: unknown; type?: unknown; payload?: unknown };
-  if (typeof candidate.id !== "string" || candidate.id.trim().length < 8) {
-    throw new Error("变更标识无效");
-  }
-  if (typeof candidate.type !== "string" || !allowedMutationTypes.has(candidate.type as KitchenMutation["type"])) {
-    throw new Error("变更类型无效");
-  }
-  if (!candidate.payload || typeof candidate.payload !== "object") throw new Error("变更内容无效");
-  return candidate as KitchenMutation;
+export class StaleMutationError extends Error {
+  status = 409;
 }
 
-export function mutationAlreadyApplied(receipts: string[], id: string): boolean {
-  return receipts.includes(id);
+function iso(value: Date | null): string | null {
+  return value?.toISOString() ?? null;
 }
 
-export function mergeShoppingItem(items: ShoppingItem[], incoming: ShoppingItem): ShoppingItem[] {
-  const match = items.find(
-    (item) => !item.checked && item.ingredientId === incoming.ingredientId && item.unit === incoming.unit,
-  );
-  if (!match) return [...items, incoming];
-  return items.map((item) => item.id === match.id ? { ...item, amount: item.amount + incoming.amount } : item);
+export async function getSingletonHousehold() {
+  const [household] = await getDb()
+    .select({
+      id: households.id,
+      passcodeHash: households.passcodeHash,
+    })
+    .from(households)
+    .where(eq(households.instanceKey, "default"))
+    .limit(1);
+  return household ?? null;
 }
 
-function parseArray<T>(value: string): T[] {
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed as T[] : [];
-  } catch {
-    return [];
-  }
-}
-
-type HouseholdRow = {
-  name: string;
-  defaultPeople: number;
-  defaultMaxMinutes: number;
-  defaultTaste: string;
-  version: number;
-  updatedAt: string;
-};
-
-export async function getHouseholdSnapshot(
-  db: D1Database,
-  householdId: string,
-): Promise<KitchenSnapshot> {
-  await ensureDatabase(db);
-  const [household, ingredientResult, dishResult, relationResult, inventoryResult, shoppingResult, decisionResult] = await Promise.all([
-    db.prepare("SELECT name, default_people AS defaultPeople, default_max_minutes AS defaultMaxMinutes, default_taste AS defaultTaste, version, updated_at AS updatedAt FROM households WHERE id = ?").bind(householdId).first<HouseholdRow>(),
-    db.prepare("SELECT id, name, category, default_unit AS defaultUnit FROM ingredients WHERE household_id = ? ORDER BY category, name").bind(householdId).all<{ id: string; name: string; category: string; defaultUnit: string }>(),
-    db.prepare("SELECT id, name, category, meal_types AS mealTypes, cooking_time AS cookingTime, taste_tags AS tasteTags, last_cooked_at AS lastCookedAt, favorite_level AS favoriteLevel, estimated_cost AS estimatedCost, seasonal, enabled, steps FROM dishes WHERE household_id = ? ORDER BY enabled DESC, favorite_level DESC, name").bind(householdId).all<Record<string, unknown>>(),
-    db.prepare("SELECT di.dish_id AS dishId, di.ingredient_id AS ingredientId, i.name, di.amount, di.unit, di.required FROM dish_ingredients di JOIN ingredients i ON i.id = di.ingredient_id WHERE di.household_id = ?").bind(householdId).all<Record<string, unknown>>(),
-    db.prepare("SELECT inv.id, inv.ingredient_id AS ingredientId, i.name, inv.amount, inv.unit, inv.bought_at AS boughtAt, inv.expire_at AS expireAt, inv.location, inv.total_cost AS totalCost FROM inventory_items inv JOIN ingredients i ON i.id = inv.ingredient_id WHERE inv.household_id = ? ORDER BY inv.expire_at, i.name").bind(householdId).all<Record<string, unknown>>(),
-    db.prepare("SELECT s.id, s.ingredient_id AS ingredientId, i.name, s.amount, s.unit, s.checked, s.source, s.actual_price AS actualPrice FROM shopping_items s JOIN ingredients i ON i.id = s.ingredient_id WHERE s.household_id = ? ORDER BY s.checked, s.created_at").bind(householdId).all<Record<string, unknown>>(),
-    db.prepare("SELECT dish_id AS dishId, action, dislike_tag AS dislikeTag, dislike_expires_at AS dislikeExpiresAt, estimated_cost AS estimatedCost, decided_at AS decidedAt FROM meal_decisions WHERE household_id = ? ORDER BY decided_at DESC LIMIT 60").bind(householdId).all<Record<string, unknown>>(),
+export async function getHouseholdSnapshot(householdId: string): Promise<KitchenSnapshot> {
+  const db = getDb();
+  const [
+    householdRows,
+    ingredientRows,
+    dishRows,
+    relationRows,
+    inventoryRows,
+    shoppingRows,
+    decisionRows,
+  ] = await Promise.all([
+    db.select().from(households)
+      .where(eq(households.id, householdId))
+      .limit(1),
+    db.select({
+      id: ingredients.id,
+      name: ingredients.name,
+      category: ingredients.category,
+      defaultUnit: ingredients.defaultUnit,
+    }).from(ingredients)
+      .where(eq(ingredients.householdId, householdId))
+      .orderBy(asc(ingredients.category), asc(ingredients.name)),
+    db.select().from(dishes)
+      .where(eq(dishes.householdId, householdId))
+      .orderBy(desc(dishes.enabled), desc(dishes.favoriteLevel), asc(dishes.name)),
+    db.select({
+      dishId: dishIngredients.dishId,
+      ingredientId: dishIngredients.ingredientId,
+      name: ingredients.name,
+      amount: dishIngredients.amount,
+      unit: dishIngredients.unit,
+      required: dishIngredients.required,
+    }).from(dishIngredients)
+      .innerJoin(
+        ingredients,
+        and(
+          eq(ingredients.householdId, dishIngredients.householdId),
+          eq(ingredients.id, dishIngredients.ingredientId),
+        ),
+      )
+      .where(eq(dishIngredients.householdId, householdId)),
+    db.select({
+      id: inventoryItems.id,
+      ingredientId: inventoryItems.ingredientId,
+      name: ingredients.name,
+      amount: inventoryItems.amount,
+      unit: inventoryItems.unit,
+      boughtAt: inventoryItems.boughtAt,
+      expireAt: inventoryItems.expireAt,
+      location: inventoryItems.location,
+      totalCost: inventoryItems.totalCost,
+    }).from(inventoryItems)
+      .innerJoin(
+        ingredients,
+        and(
+          eq(ingredients.householdId, inventoryItems.householdId),
+          eq(ingredients.id, inventoryItems.ingredientId),
+        ),
+      )
+      .where(eq(inventoryItems.householdId, householdId))
+      .orderBy(asc(inventoryItems.expireAt), asc(ingredients.name)),
+    db.select({
+      id: shoppingItems.id,
+      ingredientId: shoppingItems.ingredientId,
+      name: ingredients.name,
+      amount: shoppingItems.amount,
+      unit: shoppingItems.unit,
+      checked: shoppingItems.checked,
+      source: shoppingItems.source,
+      actualPrice: shoppingItems.actualPrice,
+    }).from(shoppingItems)
+      .innerJoin(
+        ingredients,
+        and(
+          eq(ingredients.householdId, shoppingItems.householdId),
+          eq(ingredients.id, shoppingItems.ingredientId),
+        ),
+      )
+      .where(eq(shoppingItems.householdId, householdId))
+      .orderBy(asc(shoppingItems.checked), asc(shoppingItems.createdAt)),
+    db.select().from(mealDecisions)
+      .where(eq(mealDecisions.householdId, householdId))
+      .orderBy(desc(mealDecisions.decidedAt))
+      .limit(100),
   ]);
+
+  const household = householdRows[0];
   if (!household) throw new Error("家庭空间不存在");
 
   const relationsByDish = new Map<string, Dish["ingredients"]>();
-  for (const row of relationResult.results) {
-    const dishId = String(row.dishId);
-    const relations = relationsByDish.get(dishId) ?? [];
+  for (const row of relationRows) {
+    const relations = relationsByDish.get(row.dishId) ?? [];
     relations.push({
-      ingredientId: String(row.ingredientId), name: String(row.name), amount: Number(row.amount),
-      unit: String(row.unit), required: Boolean(row.required),
+      ingredientId: row.ingredientId,
+      name: row.name,
+      amount: Number(row.amount),
+      unit: row.unit,
+      required: row.required,
     });
-    relationsByDish.set(dishId, relations);
+    relationsByDish.set(row.dishId, relations);
   }
 
-  const dishes: Dish[] = dishResult.results.map((row) => ({
-    id: String(row.id), name: String(row.name), category: String(row.category),
-    enabled: Boolean(row.enabled), mealTypes: parseArray<MealType>(String(row.mealTypes)),
-    cookingTime: Number(row.cookingTime), tasteTags: parseArray<string>(String(row.tasteTags)),
-    favoriteLevel: Number(row.favoriteLevel), lastCookedAt: row.lastCookedAt ? String(row.lastCookedAt) : null,
-    estimatedCost: Number(row.estimatedCost), seasonal: Boolean(row.seasonal),
-    steps: parseArray<string>(String(row.steps)), ingredients: relationsByDish.get(String(row.id)) ?? [],
+  const mappedDishes: Dish[] = dishRows.map((dish) => ({
+    id: dish.id,
+    name: dish.name,
+    category: dish.category,
+    enabled: dish.enabled,
+    mealTypes: dish.mealTypes,
+    baseServings: dish.baseServings,
+    cookingTime: dish.cookingTime,
+    tasteTags: dish.tasteTags,
+    favoriteLevel: dish.favoriteLevel,
+    lastCookedAt: iso(dish.lastCookedAt),
+    estimatedCost: Number(dish.estimatedCost),
+    seasonal: dish.seasonal,
+    steps: dish.steps,
+    ingredients: relationsByDish.get(dish.id) ?? [],
   }));
-  const inventory: InventoryItem[] = inventoryResult.results.map((row) => ({
-    id: String(row.id), ingredientId: String(row.ingredientId), name: String(row.name),
-    amount: Number(row.amount), unit: String(row.unit), boughtAt: String(row.boughtAt),
-    expireAt: String(row.expireAt), location: String(row.location) as InventoryItem["location"],
-    totalCost: row.totalCost === null ? undefined : Number(row.totalCost),
+  const inventory: InventoryItem[] = inventoryRows.map((item) => ({
+    id: item.id,
+    ingredientId: item.ingredientId,
+    name: item.name,
+    amount: Number(item.amount),
+    unit: item.unit,
+    boughtAt: item.boughtAt.toISOString(),
+    expireAt: item.expireAt.toISOString(),
+    location: item.location as InventoryItem["location"],
+    totalCost: item.totalCost === null ? undefined : Number(item.totalCost),
   }));
-  const shoppingItems: ShoppingItem[] = shoppingResult.results.map((row) => ({
-    id: String(row.id), ingredientId: String(row.ingredientId), name: String(row.name),
-    amount: Number(row.amount), unit: String(row.unit), checked: Boolean(row.checked),
-    source: String(row.source) as ShoppingItem["source"],
-    actualPrice: row.actualPrice === null ? undefined : Number(row.actualPrice),
+  const mappedShopping: ShoppingItem[] = shoppingRows.map((item) => ({
+    id: item.id,
+    ingredientId: item.ingredientId,
+    name: item.name,
+    amount: Number(item.amount),
+    unit: item.unit,
+    checked: item.checked,
+    source: item.source as ShoppingItem["source"],
+    actualPrice: item.actualPrice === null ? undefined : Number(item.actualPrice),
   }));
+
   const now = Date.now();
-  const accepted = decisionResult.results.filter((row) => row.action === "accept" && row.dishId);
-  const activeDislikes = decisionResult.results
-    .filter((row) => row.action === "dislike" && row.dislikeTag && row.dislikeExpiresAt)
-    .filter((row) => new Date(String(row.dislikeExpiresAt)).getTime() > now)
-    .map((row) => ({ tag: String(row.dislikeTag), expiresAt: String(row.dislikeExpiresAt) }));
-  const weekAgo = now - 7 * 86_400_000;
-  const weekly = accepted.filter((row) => new Date(String(row.decidedAt)).getTime() >= weekAgo);
-  const lowCostFavorite = [...dishes].filter((dish) => dish.favoriteLevel >= 4)
+  const accepted = decisionRows.filter((decision) => decision.action === "accept" && decision.dishId);
+  const activeDislikes = decisionRows
+    .filter((decision) =>
+      decision.action === "dislike" &&
+      decision.dislikeTag &&
+      decision.dislikeExpiresAt &&
+      decision.dislikeExpiresAt.getTime() > now)
+    .map((decision) => ({
+      tag: decision.dislikeTag!,
+      expiresAt: decision.dislikeExpiresAt!.toISOString(),
+    }));
+  const weekAgo = now - 7 * DAY_MS;
+  const weekly = accepted.filter((decision) => decision.decidedAt.getTime() >= weekAgo);
+  const lowCostFavorite = [...mappedDishes]
+    .filter((dish) => dish.favoriteLevel >= 4)
     .sort((a, b) => a.estimatedCost - b.estimatedCost)[0]?.name ?? null;
 
   return {
+    dataEpoch: household.dataEpoch,
     household: {
-      name: household.name, defaultPeople: household.defaultPeople,
-      defaultMaxMinutes: household.defaultMaxMinutes, defaultTaste: household.defaultTaste,
+      name: household.name,
+      defaultPeople: household.defaultPeople,
+      defaultMaxMinutes: household.defaultMaxMinutes,
+      defaultTaste: household.defaultTaste,
     },
-    ingredients: ingredientResult.results,
-    dishes,
+    ingredients: ingredientRows,
+    dishes: mappedDishes,
     inventory,
-    shoppingItems,
-    recentDecisions: accepted.map((row) => ({ dishId: String(row.dishId), decidedAt: String(row.decidedAt) })),
+    shoppingItems: mappedShopping,
+    recentDecisions: accepted.map((decision) => ({
+      dishId: decision.dishId!,
+      decidedAt: decision.decidedAt.toISOString(),
+    })),
     activeDislikes,
     stats: {
-      weeklyCost: weekly.reduce((sum, row) => sum + Number(row.estimatedCost ?? 0), 0),
+      weeklyCost: weekly.reduce((sum, decision) => sum + Number(decision.estimatedCost ?? 0), 0),
       acceptedMeals: weekly.length,
-      wasteCount: 0,
+      inventoryCount: inventory.length,
       lowCostFavorite,
     },
     version: household.version,
-    syncedAt: household.updatedAt,
+    syncedAt: household.updatedAt.toISOString(),
   };
 }
 
-async function markChanged(db: D1Database, householdId: string, mutationId: string): Promise<void> {
-  const response = JSON.stringify({ applied: true });
-  await db.batch([
-    db.prepare("UPDATE households SET version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(householdId),
-    db.prepare("INSERT INTO mutation_receipts (id, household_id, response_json) VALUES (?, ?, ?)").bind(mutationId, householdId, response),
-  ]);
+async function addOrMergeShopping(
+  tx: Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0],
+  householdId: string,
+  item: {
+    id: string;
+    ingredientId: string;
+    amount: number;
+    unit: string;
+    source: ShoppingItem["source"];
+  },
+): Promise<void> {
+  const [existing] = await tx.select({
+    id: shoppingItems.id,
+    amount: shoppingItems.amount,
+  }).from(shoppingItems).where(and(
+    eq(shoppingItems.householdId, householdId),
+    eq(shoppingItems.ingredientId, item.ingredientId),
+    eq(shoppingItems.unit, item.unit),
+    eq(shoppingItems.checked, false),
+  )).limit(1);
+  if (existing) {
+    await tx.update(shoppingItems).set({
+      amount: String(Number(existing.amount) + item.amount),
+      updatedAt: new Date(),
+    }).where(and(
+      eq(shoppingItems.householdId, householdId),
+      eq(shoppingItems.id, existing.id),
+    ));
+    return;
+  }
+  await tx.insert(shoppingItems).values({
+    id: item.id,
+    householdId,
+    ingredientId: item.ingredientId,
+    amount: String(item.amount),
+    unit: item.unit,
+    source: item.source,
+  });
 }
 
 export async function applyMutation(
-  db: D1Database,
   householdId: string,
   mutation: KitchenMutation,
 ): Promise<{ applied: boolean; snapshot: KitchenSnapshot }> {
-  await ensureDatabase(db);
-  const receipt = await db.prepare("SELECT id FROM mutation_receipts WHERE id = ? AND household_id = ?")
-    .bind(mutation.id, householdId).first();
-  if (receipt) return { applied: false, snapshot: await getHouseholdSnapshot(db, householdId) };
+  const db = getDb();
+  const applied = await db.transaction(async (tx) => {
+    const [household] = await tx.select({
+      dataEpoch: households.dataEpoch,
+    }).from(households)
+      .where(eq(households.id, householdId))
+      .limit(1)
+      .for("update");
+    if (!household || household.dataEpoch !== mutation.dataEpoch) {
+      throw new StaleMutationError("家庭数据已在另一台设备重置，请退出后重新进入");
+    }
 
-  const payload = mutation.payload as Record<string, unknown>;
-  switch (mutation.type) {
-    case "inventory.upsert": {
-      const item = mutation.payload;
-      await db.prepare(`INSERT INTO inventory_items (id, household_id, ingredient_id, amount, unit, bought_at, expire_at, location, total_cost, note)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET ingredient_id = excluded.ingredient_id, amount = excluded.amount, unit = excluded.unit, bought_at = excluded.bought_at, expire_at = excluded.expire_at, location = excluded.location, total_cost = excluded.total_cost, note = excluded.note, updated_at = CURRENT_TIMESTAMP`)
-        .bind(item.id, householdId, item.ingredientId, item.amount, item.unit, item.boughtAt ?? new Date().toISOString(), item.expireAt, item.location ?? "fridge", item.totalCost ?? null, item.note ?? "").run();
-      break;
-    }
-    case "inventory.consume":
-      await db.prepare("DELETE FROM inventory_items WHERE id = ? AND household_id = ?").bind(mutation.payload.id, householdId).run();
-      break;
-    case "dish.upsert": {
-      const dish = mutation.payload;
-      const statements = [db.prepare(`INSERT INTO dishes (id, household_id, name, category, meal_types, cooking_time, taste_tags, last_cooked_at, favorite_level, estimated_cost, seasonal, enabled, steps)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET name = excluded.name, category = excluded.category, meal_types = excluded.meal_types, cooking_time = excluded.cooking_time, taste_tags = excluded.taste_tags, favorite_level = excluded.favorite_level, estimated_cost = excluded.estimated_cost, seasonal = excluded.seasonal, enabled = excluded.enabled, steps = excluded.steps, updated_at = CURRENT_TIMESTAMP`)
-        .bind(dish.id, householdId, dish.name, dish.category, JSON.stringify(dish.mealTypes), dish.cookingTime, JSON.stringify(dish.tasteTags), dish.lastCookedAt, dish.favoriteLevel, dish.estimatedCost, dish.seasonal ? 1 : 0, dish.enabled ? 1 : 0, JSON.stringify(dish.steps)),
-      db.prepare("DELETE FROM dish_ingredients WHERE dish_id = ? AND household_id = ?").bind(dish.id, householdId)];
-      dish.ingredients.forEach((ingredient) => statements.push(db.prepare(
-        "INSERT INTO dish_ingredients (id, household_id, dish_id, ingredient_id, amount, unit, required) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      ).bind(`${dish.id}-${ingredient.ingredientId}`, householdId, dish.id, ingredient.ingredientId, ingredient.amount, ingredient.unit, ingredient.required ? 1 : 0)));
-      await db.batch(statements);
-      break;
-    }
-    case "dish.disable":
-      await db.prepare("UPDATE dishes SET enabled = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND household_id = ?").bind(mutation.payload.id, householdId).run();
-      break;
-    case "shopping.add": {
-      const item = mutation.payload;
-      const existing = await db.prepare("SELECT id, amount FROM shopping_items WHERE household_id = ? AND ingredient_id = ? AND unit = ? AND checked = 0 LIMIT 1")
-        .bind(householdId, item.ingredientId, item.unit).first<{ id: string; amount: number }>();
-      if (existing) {
-        await db.prepare("UPDATE shopping_items SET amount = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-          .bind(Number(existing.amount) + item.amount, existing.id).run();
-      } else {
-        await db.prepare("INSERT INTO shopping_items (id, household_id, ingredient_id, amount, unit, source) VALUES (?, ?, ?, ?, ?, ?)")
-          .bind(item.id, householdId, item.ingredientId, item.amount, item.unit, item.source).run();
+    const receipt = await tx.insert(mutationReceipts).values({
+      id: mutation.id,
+      householdId,
+      responseJson: { applied: true },
+    }).onConflictDoNothing({
+      target: [mutationReceipts.householdId, mutationReceipts.id],
+    }).returning({ id: mutationReceipts.id });
+
+    if (receipt.length === 0) return false;
+
+    switch (mutation.type) {
+      case "inventory.upsert": {
+        const item = mutation.payload;
+        const updated = await tx.update(inventoryItems).set({
+          ingredientId: item.ingredientId,
+          amount: String(item.amount),
+          unit: item.unit,
+          boughtAt: new Date(item.boughtAt ?? Date.now()),
+          expireAt: new Date(item.expireAt),
+          location: item.location ?? "fridge",
+          totalCost: item.totalCost === undefined ? null : String(item.totalCost),
+          note: item.note ?? "",
+          updatedAt: new Date(),
+        }).where(and(
+          eq(inventoryItems.householdId, householdId),
+          eq(inventoryItems.id, item.id),
+        )).returning({ id: inventoryItems.id });
+        if (updated.length === 0) {
+          await tx.insert(inventoryItems).values({
+            id: item.id,
+            householdId,
+            ingredientId: item.ingredientId,
+            amount: String(item.amount),
+            unit: item.unit,
+            boughtAt: new Date(item.boughtAt ?? Date.now()),
+            expireAt: new Date(item.expireAt),
+            location: item.location ?? "fridge",
+            totalCost: item.totalCost === undefined ? null : String(item.totalCost),
+            note: item.note ?? "",
+          });
+        }
+        break;
       }
-      break;
-    }
-    case "shopping.toggle":
-      await db.prepare("UPDATE shopping_items SET checked = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND household_id = ?")
-        .bind(mutation.payload.checked ? 1 : 0, mutation.payload.id, householdId).run();
-      break;
-    case "shopping.stock": {
-      const ids = mutation.payload.ids;
-      for (const id of ids) {
-        const item = await db.prepare(`SELECT s.ingredient_id AS ingredientId, s.amount, s.unit, s.actual_price AS actualPrice, i.shelf_life_days AS shelfLife
-          FROM shopping_items s JOIN ingredients i ON i.id = s.ingredient_id WHERE s.id = ? AND s.household_id = ? AND s.checked = 1`)
-          .bind(id, householdId).first<{ ingredientId: string; amount: number; unit: string; actualPrice: number | null; shelfLife: number }>();
-        if (!item) continue;
+      case "inventory.consume":
+        await tx.delete(inventoryItems).where(and(
+          eq(inventoryItems.householdId, householdId),
+          eq(inventoryItems.id, mutation.payload.id),
+        ));
+        break;
+      case "dish.upsert": {
+        const dish = mutation.payload;
+        const dishValues = {
+          name: dish.name,
+          category: dish.category,
+          mealTypes: dish.mealTypes,
+          baseServings: dish.baseServings,
+          cookingTime: dish.cookingTime,
+          tasteTags: dish.tasteTags,
+          lastCookedAt: dish.lastCookedAt ? new Date(dish.lastCookedAt) : null,
+          favoriteLevel: dish.favoriteLevel,
+          estimatedCost: String(dish.estimatedCost),
+          seasonal: dish.seasonal,
+          enabled: dish.enabled,
+          steps: dish.steps,
+          updatedAt: new Date(),
+        };
+        const updated = await tx.update(dishes).set(dishValues).where(and(
+          eq(dishes.householdId, householdId),
+          eq(dishes.id, dish.id),
+        )).returning({ id: dishes.id });
+        if (updated.length === 0) {
+          await tx.insert(dishes).values({
+            id: dish.id,
+            householdId,
+            ...dishValues,
+          });
+        }
+        await tx.delete(dishIngredients).where(and(
+          eq(dishIngredients.householdId, householdId),
+          eq(dishIngredients.dishId, dish.id),
+        ));
+        if (dish.ingredients.length > 0) {
+          await tx.insert(dishIngredients).values(dish.ingredients.map((ingredient) => ({
+            id: crypto.randomUUID(),
+            householdId,
+            dishId: dish.id,
+            ingredientId: ingredient.ingredientId,
+            amount: String(ingredient.amount),
+            unit: ingredient.unit,
+            required: ingredient.required,
+          })));
+        }
+        break;
+      }
+      case "dish.disable":
+        await tx.update(dishes).set({
+          enabled: false,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(dishes.householdId, householdId),
+          eq(dishes.id, mutation.payload.id),
+        ));
+        break;
+      case "shopping.add":
+        await addOrMergeShopping(tx, householdId, mutation.payload);
+        break;
+      case "shopping.toggle": {
+        const [target] = await tx.select().from(shoppingItems).where(and(
+          eq(shoppingItems.householdId, householdId),
+          eq(shoppingItems.id, mutation.payload.id),
+        )).limit(1);
+        if (!target) break;
+        if (!mutation.payload.checked) {
+          const [duplicate] = await tx.select({
+            id: shoppingItems.id,
+            amount: shoppingItems.amount,
+          }).from(shoppingItems).where(and(
+            eq(shoppingItems.householdId, householdId),
+            eq(shoppingItems.ingredientId, target.ingredientId),
+            eq(shoppingItems.unit, target.unit),
+            eq(shoppingItems.checked, false),
+            ne(shoppingItems.id, target.id),
+          )).limit(1);
+          if (duplicate) {
+            await tx.update(shoppingItems).set({
+              amount: String(Number(duplicate.amount) + Number(target.amount)),
+              updatedAt: new Date(),
+            }).where(and(
+              eq(shoppingItems.householdId, householdId),
+              eq(shoppingItems.id, duplicate.id),
+            ));
+            await tx.delete(shoppingItems).where(and(
+              eq(shoppingItems.householdId, householdId),
+              eq(shoppingItems.id, target.id),
+            ));
+            break;
+          }
+        }
+        await tx.update(shoppingItems).set({
+          checked: mutation.payload.checked,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(shoppingItems.householdId, householdId),
+          eq(shoppingItems.id, mutation.payload.id),
+        ));
+        break;
+      }
+      case "shopping.stock": {
+        if (mutation.payload.ids.length === 0) break;
+        const stocked = await tx.select({
+          id: shoppingItems.id,
+          ingredientId: shoppingItems.ingredientId,
+          amount: shoppingItems.amount,
+          unit: shoppingItems.unit,
+          actualPrice: shoppingItems.actualPrice,
+          shelfLifeDays: ingredients.shelfLifeDays,
+        }).from(shoppingItems)
+          .innerJoin(
+            ingredients,
+            and(
+              eq(ingredients.householdId, shoppingItems.householdId),
+              eq(ingredients.id, shoppingItems.ingredientId),
+            ),
+          )
+          .where(and(
+            eq(shoppingItems.householdId, householdId),
+            eq(shoppingItems.checked, true),
+            inArray(shoppingItems.id, mutation.payload.ids),
+          ));
         const now = new Date();
-        const expiresAt = new Date(now.getTime() + Number(item.shelfLife) * 86_400_000).toISOString();
-        await db.batch([
-          db.prepare("INSERT INTO inventory_items (id, household_id, ingredient_id, amount, unit, bought_at, expire_at, location, total_cost) VALUES (?, ?, ?, ?, ?, ?, ?, 'fridge', ?)")
-            .bind(crypto.randomUUID(), householdId, item.ingredientId, item.amount, item.unit, now.toISOString(), expiresAt, item.actualPrice),
-          db.prepare("DELETE FROM shopping_items WHERE id = ? AND household_id = ?").bind(id, householdId),
-        ]);
+        if (stocked.length > 0) {
+          await tx.insert(inventoryItems).values(stocked.map((item) => ({
+            id: crypto.randomUUID(),
+            householdId,
+            ingredientId: item.ingredientId,
+            amount: item.amount,
+            unit: item.unit,
+            boughtAt: now,
+            expireAt: new Date(now.getTime() + item.shelfLifeDays * DAY_MS),
+            location: "fridge",
+            totalCost: item.actualPrice,
+            note: "购物清单入库",
+          })));
+          await tx.delete(shoppingItems).where(and(
+            eq(shoppingItems.householdId, householdId),
+            inArray(shoppingItems.id, stocked.map((item) => item.id)),
+          ));
+        }
+        break;
       }
-      break;
-    }
-    case "decision.accept":
-      await db.batch([
-        db.prepare("INSERT INTO meal_decisions (id, household_id, dish_id, meal_type, action, estimated_cost) VALUES (?, ?, ?, ?, 'accept', ?)")
-          .bind(crypto.randomUUID(), householdId, mutation.payload.dishId, mutation.payload.mealType, mutation.payload.estimatedCost),
-        db.prepare("UPDATE dishes SET last_cooked_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND household_id = ?")
-          .bind(mutation.payload.dishId, householdId),
-      ]);
-      break;
-    case "decision.dislike": {
-      const expiresAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
-      await db.prepare("INSERT INTO meal_decisions (id, household_id, dish_id, meal_type, action, dislike_tag, dislike_expires_at) VALUES (?, ?, ?, ?, 'dislike', ?, ?)")
-        .bind(crypto.randomUUID(), householdId, mutation.payload.dishId ?? null, mutation.payload.mealType, mutation.payload.tag, expiresAt).run();
-      break;
-    }
-    case "settings.update":
-      await db.prepare("UPDATE households SET name = ?, default_people = ?, default_max_minutes = ?, default_taste = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-        .bind(mutation.payload.name, mutation.payload.defaultPeople, mutation.payload.defaultMaxMinutes, mutation.payload.defaultTaste, householdId).run();
-      break;
-    case "demo.clear":
-      await db.batch([
-        db.prepare("DELETE FROM shopping_items WHERE household_id = ?").bind(householdId),
-        db.prepare("DELETE FROM meal_decisions WHERE household_id = ?").bind(householdId),
-        db.prepare("DELETE FROM inventory_items WHERE household_id = ?").bind(householdId),
-        db.prepare("DELETE FROM dish_ingredients WHERE household_id = ?").bind(householdId),
-        db.prepare("DELETE FROM dishes WHERE household_id = ?").bind(householdId),
-        db.prepare("DELETE FROM ingredients WHERE household_id = ?").bind(householdId),
-      ]);
-      await seedHousehold(db, householdId);
-      break;
-    default:
-      throw new Error(`不支持的变更：${String(payload.type ?? mutation.type)}`);
-  }
+      case "meal.accept": {
+        const [dish] = await tx.select().from(dishes).where(and(
+          eq(dishes.householdId, householdId),
+          eq(dishes.id, mutation.payload.dishId),
+          eq(dishes.enabled, true),
+        )).limit(1);
+        if (!dish) throw new Error("菜谱不存在或已停用");
 
-  await markChanged(db, householdId, mutation.id);
-  return { applied: true, snapshot: await getHouseholdSnapshot(db, householdId) };
+        const [needed, inventory] = await Promise.all([
+          tx.select().from(dishIngredients).where(and(
+            eq(dishIngredients.householdId, householdId),
+            eq(dishIngredients.dishId, dish.id),
+            eq(dishIngredients.required, true),
+          )),
+          tx.select({
+            ingredientId: inventoryItems.ingredientId,
+            unit: inventoryItems.unit,
+            amount: inventoryItems.amount,
+          }).from(inventoryItems).where(eq(inventoryItems.householdId, householdId)),
+        ]);
+        const factor = mutation.payload.people / dish.baseServings;
+        for (const ingredient of needed) {
+          const available = inventory
+            .filter((item) =>
+              item.ingredientId === ingredient.ingredientId &&
+              item.unit === ingredient.unit)
+            .reduce((sum, item) => sum + Number(item.amount), 0);
+          const missing = Number(ingredient.amount) * factor - available;
+          if (missing > 0) {
+            await addOrMergeShopping(tx, householdId, {
+              id: crypto.randomUUID(),
+              ingredientId: ingredient.ingredientId,
+              amount: Number(missing.toFixed(3)),
+              unit: ingredient.unit,
+              source: "dish",
+            });
+          }
+        }
+        const cost = Number(dish.estimatedCost) * factor;
+        await tx.insert(mealDecisions).values({
+          id: crypto.randomUUID(),
+          householdId,
+          dishId: dish.id,
+          mealType: mutation.payload.mealType,
+          action: "accept",
+          people: mutation.payload.people,
+          estimatedCost: String(Number(cost.toFixed(2))),
+        });
+        await tx.update(dishes).set({
+          lastCookedAt: new Date(),
+          updatedAt: new Date(),
+        }).where(and(eq(dishes.householdId, householdId), eq(dishes.id, dish.id)));
+        break;
+      }
+      case "decision.dislike":
+        await tx.insert(mealDecisions).values({
+          id: crypto.randomUUID(),
+          householdId,
+          dishId: mutation.payload.dishId ?? null,
+          mealType: mutation.payload.mealType,
+          action: "dislike",
+          people: 1,
+          dislikeTag: mutation.payload.tag,
+          dislikeExpiresAt: new Date(Date.now() + 7 * DAY_MS),
+        });
+        break;
+      case "settings.update":
+        await tx.update(households).set({
+          name: mutation.payload.name,
+          defaultPeople: mutation.payload.defaultPeople,
+          defaultMaxMinutes: mutation.payload.defaultMaxMinutes,
+          defaultTaste: mutation.payload.defaultTaste,
+          updatedAt: new Date(),
+        }).where(eq(households.id, householdId));
+        break;
+    }
+
+    await tx.update(households).set({
+      version: sql`${households.version} + 1`,
+      updatedAt: new Date(),
+    }).where(eq(households.id, householdId));
+    return true;
+  });
+
+  return { applied, snapshot: await getHouseholdSnapshot(householdId) };
+}
+
+export async function resetHouseholdData(householdId: string): Promise<KitchenSnapshot> {
+  await getDb().transaction(async (tx) => {
+    await tx.select({ id: households.id }).from(households)
+      .where(eq(households.id, householdId))
+      .limit(1)
+      .for("update");
+    await tx.delete(mutationReceipts).where(eq(mutationReceipts.householdId, householdId));
+    await tx.delete(mealDecisions).where(eq(mealDecisions.householdId, householdId));
+    await tx.delete(shoppingItems).where(eq(shoppingItems.householdId, householdId));
+    await tx.delete(inventoryItems).where(eq(inventoryItems.householdId, householdId));
+    await tx.delete(dishes).where(eq(dishes.householdId, householdId));
+    await tx.delete(ingredients).where(eq(ingredients.householdId, householdId));
+    await seedHousehold(tx, householdId);
+    await tx.update(households).set({
+      dataEpoch: crypto.randomUUID(),
+      version: sql`${households.version} + 1`,
+      updatedAt: new Date(),
+    }).where(eq(households.id, householdId));
+  });
+  return getHouseholdSnapshot(householdId);
 }

@@ -5,7 +5,7 @@ import {
   mergeShoppingItem,
   mutationAlreadyApplied,
   validateKitchenMutation,
-} from "../app/lib/server/repository.ts";
+} from "../app/lib/mutations.ts";
 
 const existing: ShoppingItem[] = [
   {
@@ -55,5 +55,49 @@ test("rejects a mutation without a stable id", () => {
   assert.throws(
     () => validateKitchenMutation({ type: "shopping.toggle", payload: { id: "item", checked: true } }),
     /变更标识无效/,
+  );
+});
+
+test("rejects invalid nested mutation payloads", () => {
+  assert.throws(
+    () => validateKitchenMutation({
+      id: "019f8e32-b013-7000-8000-000000000001",
+      dataEpoch: "019f8e32-b013-7000-8000-000000000010",
+      type: "inventory.upsert",
+      payload: {
+        id: "019f8e32-b013-7000-8000-000000000002",
+        ingredientId: "019f8e32-b013-7000-8000-000000000003",
+        amount: -1,
+        unit: "",
+        expireAt: "not-a-date",
+      },
+    }),
+    /变更内容无效/,
+  );
+});
+
+test("requires the household data epoch on every queued mutation", () => {
+  assert.throws(
+    () => validateKitchenMutation({
+      id: "019f8e32-b013-7000-8000-000000000001",
+      type: "inventory.consume",
+      payload: { id: "019f8e32-b013-7000-8000-000000000002" },
+    }),
+    /变更内容无效/,
+  );
+});
+
+test("limits shopping stock batches", () => {
+  assert.throws(
+    () => validateKitchenMutation({
+      id: "019f8e32-b013-7000-8000-000000000001",
+      dataEpoch: "019f8e32-b013-7000-8000-000000000010",
+      type: "shopping.stock",
+      payload: {
+        ids: Array.from({ length: 101 }, (_, index) =>
+          `019f8e32-b013-7000-8000-${String(index).padStart(12, "0")}`),
+      },
+    }),
+    /变更内容无效/,
   );
 });
