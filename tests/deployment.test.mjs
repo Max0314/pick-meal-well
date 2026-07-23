@@ -138,5 +138,9 @@ test("isolates the app from the legacy platform and uses the server path contrac
   assert.doesNotMatch(firstDeploy, /chmod 0600/);
   assert.match(firstDeploy, /secret_access_ok/);
   assert.match(firstDeploy, /process\.getuid\(\) === 0/);
+  assert.match(
+    firstDeploy,
+    /for _ in \{1\.\.15\}; do[\s\S]*127\.0\.0\.1:8080\/api\/health\/ready/,
+  );
   assert.doesNotMatch(firstDeploy, /0\.0\.0\.0/);
 });

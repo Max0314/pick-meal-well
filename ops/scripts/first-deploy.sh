@@ -159,6 +159,13 @@ if ! nginx -t; then
   exit 1
 fi
 systemctl reload nginx
+for _ in {1..15}; do
+  if curl --fail --silent --show-error --max-time 5 \
+    http://127.0.0.1:8080/api/health/ready >/dev/null; then
+    break
+  fi
+  sleep 1
+done
 curl --fail --silent --show-error --max-time 5 \
   http://127.0.0.1:8080/api/health/ready >/dev/null
 
