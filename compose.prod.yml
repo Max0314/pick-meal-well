@@ -77,8 +77,10 @@ services:
     restart: "no"
     environment:
       DATABASE_URL_FILE: /run/secrets/migration_database_url
+      POSTGRES_APP_PASSWORD_FILE: /run/secrets/postgres_app_password
     secrets:
       - migration_database_url
+      - postgres_app_password
     group_add: *secret-groups
     networks:
       - backend

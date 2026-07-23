@@ -122,7 +122,9 @@ verify_secret_access() {
     ' "$@"
 }
 
-verify_secret_access migrate /run/secrets/migration_database_url
+verify_secret_access migrate \
+  /run/secrets/migration_database_url \
+  /run/secrets/postgres_app_password
 verify_secret_access app \
   /run/secrets/database_url \
   /run/secrets/redis_url \

@@ -34,6 +34,10 @@ test("keeps production data services private and separates migration credentials
   assert.match(compose, /\/run\/secrets\/migration_database_url/);
   assert.match(
     compose,
+    /POSTGRES_APP_PASSWORD_FILE: \/run\/secrets\/postgres_app_password/,
+  );
+  assert.match(
+    compose,
     /backend:\s+name: fribench-pick-meal-well-backend-v1\s+internal: true/,
   );
   assert.match(
@@ -45,13 +49,27 @@ test("keeps production data services private and separates migration credentials
   assert.match(nginx, /proxy_set_header X-Forwarded-For \$remote_addr/);
 });
 
-test("creates composite reference keys before PostgreSQL foreign keys use them", async () => {
-  const migration = await readFile(
-    new URL("drizzle/0000_broken_ikaris.sql", root),
-    "utf8",
-  );
+test("creates the application role and reference keys before they are used", async () => {
+  const [migration, migrateScript] = await Promise.all([
+    readFile(new URL("drizzle/0000_broken_ikaris.sql", root), "utf8"),
+    readFile(new URL("scripts/migrate.ts", root), "utf8"),
+  ]);
   const dishesKey = migration.indexOf('CREATE UNIQUE INDEX "dishes_household_id_idx"');
   const ingredientsKey = migration.indexOf('CREATE UNIQUE INDEX "ingredients_household_id_idx"');
+
+  assert.match(migrateScript, /readSecret\("POSTGRES_APP_PASSWORD"\)/);
+  assert.match(migrateScript, /CREATE ROLE pick_meal_well_app/);
+  assert.match(migrateScript, /ALTER ROLE pick_meal_well_app/);
+  assert.match(migrateScript, /ALTER DEFAULT PRIVILEGES/);
+  assert.match(migrateScript, /NOSUPERUSER NOCREATEDB NOCREATEROLE/);
+  assert.ok(
+    migrateScript.indexOf("CREATE ROLE pick_meal_well_app")
+      < migrateScript.indexOf("await migrate("),
+  );
+  assert.ok(
+    migrateScript.lastIndexOf("await grantApplicationPrivileges()")
+      > migrateScript.indexOf("await migrate("),
+  );
 
   assert.ok(dishesKey >= 0);
   assert.ok(ingredientsKey >= 0);
