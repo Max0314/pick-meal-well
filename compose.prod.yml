@@ -14,6 +14,9 @@ x-app-secrets: &app-secrets
 x-build-args: &build-args
   NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
 
+x-secret-groups: &secret-groups
+  - "${FRIBENCH_SECRET_GID:-1999}"
+
 services:
   postgres:
     image: postgres:17.10-bookworm
@@ -25,6 +28,7 @@ services:
     secrets:
       - postgres_owner_password
       - postgres_app_password
+    group_add: *secret-groups
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./ops/postgres/init-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
@@ -50,6 +54,7 @@ services:
       - exec redis-server --appendonly yes --requirepass "$$(cat /run/secrets/redis_password)"
     secrets:
       - redis_password
+    group_add: *secret-groups
     volumes:
       - redis_data:/data
     networks:
@@ -74,6 +79,7 @@ services:
       DATABASE_URL_FILE: /run/secrets/migration_database_url
     secrets:
       - migration_database_url
+    group_add: *secret-groups
     networks:
       - backend
     depends_on:
@@ -96,6 +102,7 @@ services:
       REDIS_URL_FILE: /run/secrets/redis_url
       SETUP_TOKEN_FILE: /run/secrets/setup_token
     secrets: *app-secrets
+    group_add: *secret-groups
     networks:
       - backend
     ports:

@@ -4,7 +4,7 @@
 
 ## 1. 准备 Secret
 
-以下文件由 root 创建，权限设为 `0600`，不进入 Git：
+以下文件由 root 创建，所有组设为专用的 `fribench-secrets`，权限设为 `0640`，不进入 Git：
 
 ```text
 /etc/fribench/postgres_owner_password
@@ -26,6 +26,12 @@ redis_url:              redis://:<URL 编码后的密码>@redis:6379/0
 
 四个密码/令牌都应独立随机生成。应用账户只有业务表 CRUD 权限；owner 连接串只挂载到迁移容器。`setup_token` 只用于首次认领，认领完成后仍保留在服务器 Secret 中，不提供给普通家庭成员。
 
+Compose 的 file-backed Secret 底层是 bind mount，不能用 `uid`、`gid`、`mode` 长语法
+重映射权限。首发脚本因此创建固定 GID `1999` 的 `fribench-secrets` 组，将 Secret 设为
+`root:fribench-secrets 0640`，再通过 `group_add` 只给容器补充该 GID。每个服务仍只挂载
+自身需要的 Secret；宿主机普通用户不加入该组。GID 已被占用或组名/GID 不一致时脚本会
+拒绝继续，可通过 `FRIBENCH_SECRET_GID` 显式选择其他未占用 GID。
+
 复制并调整非敏感运行配置：
 
 ```bash
@@ -33,7 +39,7 @@ sudo install -m 0644 ops/config/pick-meal-well.env.example /etc/fribench/pick-me
 ```
 
 当前 Nginx 只监听 `127.0.0.1:8080` 时保留 `SESSION_COOKIE_SECURE=false`。接入真实 HTTPS 域名后，必须将 `APP_ORIGIN` 改为完整公网源并设为 `true`。
-这份文件只保存非敏感运行参数；数据库、Redis 和首次认领 Secret 仍必须分别保存在上列 `0600` 文件中。
+这份文件只保存非敏感运行参数；数据库、Redis 和首次认领 Secret 仍必须分别保存在上列 `0640` 文件中。
 
 ## 2. 构建与启动
 
@@ -60,7 +66,10 @@ cd /srv/fribench/apps/web/pick-meal-well/current
 sudo ops/scripts/first-deploy.sh "$PWD"
 ```
 
-该脚本只在文件不存在时生成独立随机 Secret，不会打印 Secret；它完成 Compose 渲染、镜像构建、迁移、ready 检查、Nginx 切换、备份定时器安装和首次备份。首次认领令牌由项目所有者在可信服务器终端直接读取，不复制到 Git、日志或部署记录。
+该脚本只在文件不存在时生成独立随机 Secret，不会打印 Secret；它在启动前分别以真实的
+非 root `migrate` 和 `app` 用户验证所需 Secret 可读且非空，再完成 Compose 渲染、
+镜像构建、迁移、ready 检查、Nginx 切换、备份定时器安装和首次备份。首次认领令牌由
+项目所有者在可信服务器终端直接读取，不复制到 Git、日志或部署记录。
 
 Fribench 生产 Compose 的依赖构建默认使用 `https://registry.npmmirror.com`，两个 npm
 阶段通过 BuildKit cache mount 复用下载内容且不写入最终镜像。可在构建命令环境中用

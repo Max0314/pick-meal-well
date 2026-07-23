@@ -87,6 +87,15 @@ test("isolates the app from the legacy platform and uses the server path contrac
   assert.match(dockerfile, /npm ci .*--registry="\$\{NPM_REGISTRY\}"/);
   assert.doesNotMatch(dockerfile, /npm config set/);
 
+  assert.match(
+    compose,
+    /x-secret-groups: &secret-groups\s+- "\$\{FRIBENCH_SECRET_GID:-1999\}"/,
+  );
+  assert.equal(
+    compose.match(/group_add: \*secret-groups/g)?.length,
+    4,
+  );
+
   for (const asset of [deployment, backup, restore, backupService]) {
     assert.match(asset, /\/srv\/fribench\/apps\/web\/pick-meal-well\/current/);
     assert.doesNotMatch(asset, /\/srv\/fribench\/apps\/pick-meal-well\/current/);
@@ -95,6 +104,10 @@ test("isolates the app from the legacy platform and uses the server path contrac
   assert.doesNotMatch(deployment, /install .*\/srv\/fribench\/ops\/backup-postgres\.sh/);
   assert.match(deployment, /sites-enabled\/fribench-private-status/);
   assert.match(firstDeploy, /openssl rand -hex 32/);
-  assert.match(firstDeploy, /chmod 0600/);
+  assert.match(firstDeploy, /groupadd --system --gid/);
+  assert.match(firstDeploy, /chmod 0640/);
+  assert.doesNotMatch(firstDeploy, /chmod 0600/);
+  assert.match(firstDeploy, /secret_access_ok/);
+  assert.match(firstDeploy, /process\.getuid\(\) === 0/);
   assert.doesNotMatch(firstDeploy, /0\.0\.0\.0/);
 });
