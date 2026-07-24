@@ -24,6 +24,7 @@ const timestamps = {
 
 export const households = pgTable("households", {
   id: uuid("id").primaryKey().defaultRandom(),
+  legacyInstanceKey: text("instance_key").notNull().default("default"),
   dataEpoch: uuid("data_epoch").notNull().defaultRandom(),
   name: text("name").notNull(),
   passcodeHash: text("passcode_hash").notNull(),

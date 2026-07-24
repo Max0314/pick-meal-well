@@ -59,6 +59,8 @@ curl --fail http://127.0.0.1:21001/api/health/ready
 
 新数据库卷首次初始化时会创建无建库、建角色或超级用户权限的 `pick_meal_well_app` 角色。`migrate` 一次性容器会使用 owner 账户等待 PostgreSQL healthy 后应用已提交迁移；只有迁移成功，应用容器才会启动。所有服务使用 10 MB × 3 的 Docker JSON 日志轮转。
 
+多家庭迁移只移除 `instance_key` 的单例检查和唯一索引，暂时保留废弃列及其默认值，以便新容器启动失败且尚未创建多个家庭时可以切回旧 release；不得手工删除该列。
+
 本次重构明确不迁移旧数据，因此 Compose 使用带 `pick-meal-well` 和 `v1` 的全新命名卷；旧 PostgreSQL/Redis 卷不会被覆盖或删除。确认新版本稳定并完成备份/恢复演练后，再单独决定是否清理旧卷。
 Compose 项目、内部后端网络和应用 edge 网络均使用应用专用名称。PostgreSQL、Redis
 只连接 `fribench-pick-meal-well-backend-v1`；应用同时连接该内部网络和

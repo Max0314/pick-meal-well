@@ -1,5 +1,5 @@
 {
-  "id": "e6d41689-b711-4c50-8f67-668fd311e103",
+  "id": "2440a986-b8f9-4036-bd1b-de632f949597",
   "prevId": "bdca3849-0c24-4d5b-9252-812a2dc2342b",
   "version": "7",
   "dialect": "postgresql",
@@ -399,6 +399,13 @@
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
+        },
+        "instance_key": {
+          "name": "instance_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'default'"
         },
         "data_epoch": {
           "name": "data_epoch",

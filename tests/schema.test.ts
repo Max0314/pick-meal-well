@@ -21,6 +21,7 @@ test("exports every household-scoped table", () => {
 
 test("uses PostgreSQL-native household and serving columns", () => {
   assert.equal("instanceKey" in schema.households, false);
+  assert.ok(schema.households.legacyInstanceKey);
   assert.ok(schema.households.name);
   assert.ok(schema.households.dataEpoch);
   assert.ok(schema.households.passcodeHash);
