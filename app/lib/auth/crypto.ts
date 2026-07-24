@@ -1,7 +1,5 @@
 import { argon2id, hash, verify } from "argon2";
 
-const MIN_PASSCODE_LENGTH = 10;
-const MAX_PASSCODE_LENGTH = 128;
 const encoder = new TextEncoder();
 
 function encodeBase64Url(bytes: Uint8Array): string {
@@ -13,13 +11,7 @@ function randomBytes(length: number): Uint8Array {
 }
 
 export function validatePasscode(passcode: string): string | null {
-  const length = [...passcode].length;
-  if (passcode.trim().length < MIN_PASSCODE_LENGTH) {
-    return `家庭口令至少需要 ${MIN_PASSCODE_LENGTH} 个字符`;
-  }
-  if (length > MAX_PASSCODE_LENGTH) {
-    return `家庭口令不能超过 ${MAX_PASSCODE_LENGTH} 个字符`;
-  }
+  if (!passcode.trim()) return "请输入家庭共享口令";
   return null;
 }
 

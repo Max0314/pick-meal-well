@@ -20,6 +20,14 @@ test("accepts same-origin JSON writes", async () => {
   assert.deepEqual(await readJsonBody(request), { ok: true });
 });
 
+test("accepts a same-origin request addressed through a LAN IP", () => {
+  const request = new Request("http://192.168.111.2:21001/api/auth/claim", {
+    method: "POST",
+    headers: { origin: "http://192.168.111.2:21001" },
+  });
+  requireSameOrigin(request);
+});
+
 test("rejects cross-origin writes", () => {
   const request = new Request("https://meal.example/api/mutations", {
     method: "POST",

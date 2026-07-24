@@ -2,7 +2,7 @@ import type { KitchenSnapshot, MealType, Recommendation } from "./domain";
 import type { KitchenMutation } from "./mutations";
 
 export type BootstrapResponse = {
-  claimed: boolean;
+  hasHouseholds: boolean;
   authenticated: boolean;
   snapshot: KitchenSnapshot | null;
 };
@@ -42,15 +42,18 @@ export function getBootstrap(): Promise<BootstrapResponse> {
   return requestJson("/api/bootstrap");
 }
 
-export function claimHousehold(name: string, passcode: string, setupToken: string): Promise<{ ok: true }> {
+export function claimHousehold(name: string, passcode: string): Promise<{ ok: true }> {
   return requestJson("/api/auth/claim", {
     method: "POST",
-    body: JSON.stringify({ name, passcode, setupToken }),
+    body: JSON.stringify({ name, passcode }),
   });
 }
 
-export function loginHousehold(passcode: string): Promise<{ ok: true }> {
-  return requestJson("/api/auth/login", { method: "POST", body: JSON.stringify({ passcode }) });
+export function loginHousehold(name: string, passcode: string): Promise<{ ok: true }> {
+  return requestJson("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ name, passcode }),
+  });
 }
 
 export function logoutHousehold(): Promise<{ ok: true }> {

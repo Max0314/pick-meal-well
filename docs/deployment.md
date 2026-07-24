@@ -13,7 +13,6 @@
 /etc/fribench/migration_database_url
 /etc/fribench/redis_password
 /etc/fribench/redis_url
-/etc/fribench/setup_token
 ```
 
 内容示例：
@@ -24,10 +23,10 @@ migration_database_url: postgresql://pick_meal_well_owner:<URL 编码后的 owne
 redis_url:              redis://:<URL 编码后的密码>@redis:6379/0
 ```
 
-四个密码/令牌都应独立随机生成。应用账户只有业务表 CRUD 权限；owner 连接串只挂载到迁移容器。
+三个密码都应独立随机生成。应用账户只有业务表 CRUD 权限；owner 连接串只挂载到迁移容器。
 迁移容器额外挂载应用账户密码，用于在每次迁移前幂等创建或同步应用角色与默认权限，并在
 迁移后补授现有表和序列权限；应用容器不会获得 owner 连接串或明文应用账户密码。
-`setup_token` 只用于首次认领，认领完成后仍保留在服务器 Secret 中，不提供给普通家庭成员。
+创建家庭不依赖服务器初始化令牌。
 
 Compose 的 file-backed Secret 底层是 bind mount，不能用 `uid`、`gid`、`mode` 长语法
 重映射权限。首发脚本因此创建固定 GID `1999` 的 `fribench-secrets` 组，将 Secret 设为
@@ -41,8 +40,8 @@ Compose 的 file-backed Secret 底层是 bind mount，不能用 `uid`、`gid`、
 sudo install -m 0644 ops/config/pick-meal-well.env.example /etc/fribench/pick-meal-well.env
 ```
 
-当前 Nginx 只监听 `127.0.0.1:8080` 时保留 `SESSION_COOKIE_SECURE=false`。接入真实 HTTPS 域名后，必须将 `APP_ORIGIN` 改为完整公网源并设为 `true`。
-这份文件只保存非敏感运行参数；数据库、Redis 和首次认领 Secret 仍必须分别保存在上列 `0640` 文件中。
+当前 Nginx 只监听 `127.0.0.1:8080` 时保留 `SESSION_COOKIE_SECURE=false`。Nginx 必须把原始 `Host`（含非默认端口）传给应用，应用据此执行动态同源校验，因此局域网 IP、SSH 隧道和正式域名都不需要配置固定来源白名单。接入真实 HTTPS 域名后必须将 Cookie Secure 设为 `true`。
+这份文件只保存非敏感运行参数；数据库和 Redis Secret 仍必须分别保存在上列 `0640` 文件中。
 
 ## 2. 构建与启动
 
@@ -75,8 +74,7 @@ sudo ops/scripts/first-deploy.sh "$PWD"
 
 该脚本只在文件不存在时生成独立随机 Secret，不会打印 Secret；它在启动前分别以真实的
 非 root `migrate` 和 `app` 用户验证所需 Secret 可读且非空，再完成 Compose 渲染、
-镜像构建、迁移、ready 检查、Nginx 切换、备份定时器安装和首次备份。首次认领令牌由
-项目所有者在可信服务器终端直接读取，不复制到 Git、日志或部署记录。
+镜像构建、迁移、ready 检查、Nginx 切换、备份定时器安装和首次备份。
 
 Fribench 生产 Compose 的依赖构建默认使用 `https://registry.npmmirror.com`，两个 npm
 阶段通过 BuildKit cache mount 复用下载内容且不写入最终镜像。可在构建命令环境中用
@@ -94,7 +92,7 @@ sudo systemctl reload nginx
 curl --fail http://127.0.0.1:8080/api/health/ready
 ```
 
-仓库配置故意只监听回环地址，符合当前“公网仅 SSH 22”的边界。以后公开服务时，应先配置域名、TLS、`APP_ORIGIN` 和 Secure Cookie，再单独评审 UFW 的 80/443 变更；不要直接把应用的 3000 端口开放公网。
+仓库配置故意只监听回环地址，符合当前“公网仅 SSH 22”的边界。以后公开服务时，应先配置域名、TLS 和 Secure Cookie，再单独评审 UFW 的 80/443 变更；不要直接把应用的 3000 端口开放公网。
 旧的 `fribench-private-status` 与本应用占用相同的 `127.0.0.1:8080`，只能在应用的 `127.0.0.1:21001` ready 成功后切换；不能把两个站点同时启用。
 
 ## 4. 备份与恢复演练

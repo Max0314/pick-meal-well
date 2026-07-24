@@ -24,7 +24,6 @@ const timestamps = {
 
 export const households = pgTable("households", {
   id: uuid("id").primaryKey().defaultRandom(),
-  instanceKey: text("instance_key").notNull().default("default"),
   dataEpoch: uuid("data_epoch").notNull().defaultRandom(),
   name: text("name").notNull(),
   passcodeHash: text("passcode_hash").notNull(),
@@ -34,8 +33,7 @@ export const households = pgTable("households", {
   version: bigint("version", { mode: "number" }).notNull().default(1),
   ...timestamps,
 }, (table) => [
-  uniqueIndex("households_instance_key_idx").on(table.instanceKey),
-  check("households_singleton_check", sql`${table.instanceKey} = 'default'`),
+  uniqueIndex("households_name_idx").on(table.name),
   check("households_name_length_check", sql`char_length(${table.name}) between 1 and 40`),
   check("households_people_check", sql`${table.defaultPeople} between 1 and 12`),
   check("households_minutes_check", sql`${table.defaultMaxMinutes} between 10 and 180`),

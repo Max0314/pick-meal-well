@@ -84,7 +84,8 @@ function recommendationFor(people) {
 }
 
 async function installApiStubs(page, initialState) {
-  let { authenticated, claimed } = initialState;
+  let { authenticated, hasHouseholds } = initialState;
+  let currentHouseholdName = "我们家";
   let mutationOffline = false;
   const mutations = [];
   await page.route("**/api/**", async (route) => {
@@ -93,21 +94,32 @@ async function installApiStubs(page, initialState) {
     if (pathname === "/api/bootstrap") {
       return route.fulfill({
         json: authenticated
-          ? { claimed: true, authenticated: true, snapshot }
-          : { claimed, authenticated: false, snapshot: null },
+          ? {
+              hasHouseholds: true,
+              authenticated: true,
+              snapshot: {
+                ...snapshot,
+                household: { ...snapshot.household, name: currentHouseholdName },
+              },
+            }
+          : { hasHouseholds, authenticated: false, snapshot: null },
       });
     }
     if (pathname === "/api/auth/claim") {
       const body = request.postDataJSON();
-      assert.equal(body.setupToken, "server-setup-token");
-      assert.equal(body.passcode, "family-meal-2026");
-      claimed = true;
+      assert.equal("setupToken" in body, false);
+      assert.ok(body.name);
+      assert.ok(body.passcode);
+      currentHouseholdName = body.name;
+      hasHouseholds = true;
       authenticated = true;
       return route.fulfill({ status: 201, json: { ok: true } });
     }
     if (pathname === "/api/auth/login") {
       const body = request.postDataJSON();
-      assert.equal(body.passcode, "family-meal-2026");
+      assert.equal(body.name, "我们家");
+      assert.equal(body.passcode, "1");
+      currentHouseholdName = body.name;
       authenticated = true;
       return route.fulfill({ json: { ok: true } });
     }
@@ -155,7 +167,7 @@ function monitorErrors(page) {
 async function desktopFlow(browser) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const errors = monitorErrors(page);
-  const api = await installApiStubs(page, { claimed: true, authenticated: true });
+  const api = await installApiStubs(page, { hasHouseholds: true, authenticated: true });
   await page.goto(baseURL, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: /就吃这个吧/ }).waitFor();
   await page.getByRole("button", { name: "早餐" }).click();
@@ -195,21 +207,29 @@ async function mobileClaimFlow(browser) {
     hasTouch: true,
   });
   const errors = monitorErrors(page);
-  const api = await installApiStubs(page, { claimed: false, authenticated: false });
+  const api = await installApiStubs(page, { hasHouseholds: false, authenticated: false });
   await page.goto(baseURL, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "以后，打开就有答案。" }).waitFor();
   await page.getByLabel("家庭名称").fill("我们家");
-  await page.getByLabel("服务器初始化令牌").fill("server-setup-token");
-  await page.getByLabel("家庭共享口令").fill("family-meal-2026");
+  await page.getByLabel("家庭共享口令").fill("1");
   await page.getByRole("button", { name: "创建并进入" }).click();
   await page.getByRole("heading", { name: /就吃这个吧/ }).waitFor();
 
   await page.getByRole("button", { name: /我的/ }).click();
   await page.getByRole("button", { name: "退出当前设备" }).click();
   await page.getByRole("heading", { name: "下一顿，别再纠结了。" }).waitFor();
-  await page.getByLabel("家庭共享口令").fill("family-meal-2026");
+  await page.getByLabel("家庭名称").fill("我们家");
+  await page.getByLabel("家庭共享口令").fill("1");
   await page.getByRole("button", { name: "进入家庭厨房" }).click();
   await page.getByRole("heading", { name: "我们家" }).waitFor();
+
+  await page.getByRole("button", { name: /我的/ }).click();
+  await page.getByRole("button", { name: "退出当前设备" }).click();
+  await page.getByRole("button", { name: "创建新家庭" }).click();
+  await page.getByLabel("家庭名称").fill("第二个家");
+  await page.getByLabel("家庭共享口令").fill("a");
+  await page.getByRole("button", { name: "创建并进入" }).click();
+  await page.getByRole("heading", { name: "第二个家" }).waitFor();
 
   await page.getByRole("button", { name: /采购/ }).click();
   api.setMutationOffline(true);

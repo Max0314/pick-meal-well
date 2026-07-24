@@ -1,7 +1,7 @@
 import { verifyPasscode } from "../../../lib/auth/crypto";
 import { requireHouseholdSession, SessionError } from "../../../lib/auth/session";
 import {
-  getSingletonHousehold,
+  getHouseholdCredentials,
   resetHouseholdData,
 } from "../../../lib/server/repository";
 import {
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
       );
     }
     const payload = await readJsonBody<{ passcode?: string; confirmation?: string }>(request);
-    const household = await getSingletonHousehold();
+    const household = await getHouseholdCredentials(session.householdId);
     if (
       household?.id !== session.householdId ||
       payload.confirmation !== "RESET" ||

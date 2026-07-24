@@ -9,7 +9,6 @@ x-logging: &default-logging
 x-app-secrets: &app-secrets
   - database_url
   - redis_url
-  - setup_token
 
 x-build-args: &build-args
   NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
@@ -102,7 +101,6 @@ services:
     environment:
       DATABASE_URL_FILE: /run/secrets/database_url
       REDIS_URL_FILE: /run/secrets/redis_url
-      SETUP_TOKEN_FILE: /run/secrets/setup_token
     secrets: *app-secrets
     group_add: *secret-groups
     networks:
@@ -161,5 +159,3 @@ secrets:
     file: /etc/fribench/redis_url
   redis_password:
     file: /etc/fribench/redis_password
-  setup_token:
-    file: /etc/fribench/setup_token

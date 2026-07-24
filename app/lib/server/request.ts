@@ -14,9 +14,7 @@ export function requireSameOrigin(request: Request): void {
   if (!origin) throw new RequestError("缺少请求来源", 403);
   let expected: string;
   try {
-    expected = process.env.APP_ORIGIN
-      ? new URL(process.env.APP_ORIGIN).origin
-      : new URL(request.url).origin;
+    expected = new URL(request.url).origin;
   } catch {
     throw new RequestError("请求地址无效", 400);
   }

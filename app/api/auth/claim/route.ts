@@ -1,5 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto";
-import { getDb, readSecret } from "../../../../db";
+import { getDb } from "../../../../db";
 import { households } from "../../../../db/schema";
 import { derivePasscode, validatePasscode } from "../../../lib/auth/crypto";
 import { createHouseholdSession } from "../../../lib/auth/session";
@@ -12,16 +11,10 @@ import {
 } from "../../../lib/server/request";
 import { seedHousehold } from "../../../lib/server/seed";
 
-function validSetupToken(candidate: string): boolean {
-  const expected = createHash("sha256").update(readSecret("SETUP_TOKEN")).digest();
-  const actual = createHash("sha256").update(candidate).digest();
-  return timingSafeEqual(actual, expected);
-}
-
 export async function POST(request: Request) {
   try {
     requireSameOrigin(request);
-    const rate = await consumeRateLimit("claim", clientAddress(request), 5, 3_600);
+    const rate = await consumeRateLimit("claim", clientAddress(request), 20, 3_600);
     if (!rate.allowed) {
       return Response.json(
         { error: "创建尝试过多，请稍后再试" },
@@ -31,11 +24,7 @@ export async function POST(request: Request) {
     const payload = await readJsonBody<{
       name?: string;
       passcode?: string;
-      setupToken?: string;
     }>(request);
-    if (!validSetupToken(payload.setupToken ?? "")) {
-      return Response.json({ error: "初始化令牌无效" }, { status: 403 });
-    }
     const name = payload.name?.trim() ?? "";
     const passcode = payload.passcode ?? "";
     if ([...name].length < 1 || [...name].length > 40) {
@@ -50,7 +39,6 @@ export async function POST(request: Request) {
       await getDb().transaction(async (tx) => {
         await tx.insert(households).values({
           id: householdId,
-          instanceKey: "default",
           name,
           passcodeHash,
         });
@@ -58,7 +46,7 @@ export async function POST(request: Request) {
       });
     } catch (error) {
       if ((error as { code?: string }).code === "23505") {
-        return Response.json({ error: "家庭空间已创建，请输入共享口令" }, { status: 409 });
+        return Response.json({ error: "家庭名称已存在，请更换名称或直接登录" }, { status: 409 });
       }
       throw error;
     }

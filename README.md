@@ -7,6 +7,7 @@
 - 一个最佳推荐，支持早餐、午餐、晚餐以及“就吃这个”“换一个”“不想吃这类”
 - 按人数缩放食材和预计成本，合并同一食材的多批库存
 - 冰箱库存、临期提醒、家庭菜谱和采购入库
+- 一套部署可创建多个彼此隔离的家庭空间，使用家庭名称和共享口令进入
 - Argon2id 家庭共享口令、HttpOnly 会话和 Redis 登录限流
 - IndexedDB 最近快照与有序、幂等的离线变更队列
 - PostgreSQL 持久数据、Redis 短期缓存、Next.js standalone 容器
@@ -19,7 +20,6 @@
 npm ci
 export DATABASE_URL='postgresql://pick_meal_well:password@127.0.0.1:5432/pick_meal_well'
 export REDIS_URL='redis://:password@127.0.0.1:6379/0'
-export SETUP_TOKEN='local-setup-token'
 npm run db:migrate
 npm run dev
 ```

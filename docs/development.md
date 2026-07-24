@@ -7,7 +7,7 @@
 - Redis 8
 - npm 与锁定的 `package-lock.json`
 
-应用接受 `DATABASE_URL`、`REDIS_URL`、`SETUP_TOKEN`；对应的 `*_FILE` 优先级更高并供生产 Docker Secret 使用。首次本地认领需要输入 `SETUP_TOKEN`。
+应用接受 `DATABASE_URL`、`REDIS_URL`；对应的 `*_FILE` 优先级更高并供生产 Docker Secret 使用。任意访问者都可以创建名称唯一的新家庭，家庭共享口令只要求非空。
 
 ## 常用命令
 

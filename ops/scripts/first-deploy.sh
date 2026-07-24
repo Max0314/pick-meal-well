@@ -57,7 +57,6 @@ create_secret() {
 create_secret "${secret_dir}/postgres_owner_password"
 create_secret "${secret_dir}/postgres_app_password"
 create_secret "${secret_dir}/redis_password"
-create_secret "${secret_dir}/setup_token"
 
 owner_password="$(<"${secret_dir}/postgres_owner_password")"
 app_password="$(<"${secret_dir}/postgres_app_password")"
@@ -127,8 +126,7 @@ verify_secret_access migrate \
   /run/secrets/postgres_app_password
 verify_secret_access app \
   /run/secrets/database_url \
-  /run/secrets/redis_url \
-  /run/secrets/setup_token
+  /run/secrets/redis_url
 
 docker compose -f "${compose_file}" up -d
 

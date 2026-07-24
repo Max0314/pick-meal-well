@@ -49,19 +49,39 @@ function mealFromTime(): MealType {
   return hour >= 14 ? "dinner" : "lunch";
 }
 
-function AuthGate({ claimed, onSuccess }: { claimed: boolean; onSuccess: () => Promise<void> }) {
+type AuthMode = "login" | "create";
+
+function AuthGate({
+  hasHouseholds,
+  onSuccess,
+}: {
+  hasHouseholds: boolean;
+  onSuccess: () => Promise<void>;
+}) {
+  const [mode, setMode] = useState<AuthMode>(hasHouseholds ? "login" : "create");
   const [name, setName] = useState("我们家");
   const [passcode, setPasscode] = useState("");
-  const [setupToken, setSetupToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const creating = mode === "create";
+
+  function switchMode(nextMode: AuthMode) {
+    setMode(nextMode);
+    setError("");
+    setPasscode("");
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
-    try { if (claimed) await loginHousehold(passcode); else await claimHousehold(name, passcode, setupToken); await onSuccess(); }
+    try {
+      if (creating) await claimHousehold(name, passcode);
+      else await loginHousehold(name, passcode);
+      await onSuccess();
+    }
     catch (reason) { setError(reason instanceof Error ? reason.message : "暂时无法进入，请重试"); }
     finally { setBusy(false); }
   }
-  return <main className="app-shell auth-shell"><div className="auth-brand"><p className="brand">好好吃饭</p><span>家庭下一顿决策助手</span></div><div className="auth-copy"><p>{claimed ? "欢迎回来" : "先认领你们家的厨房"}</p><h1>{claimed ? "下一顿，别再纠结了。" : "以后，打开就有答案。"}</h1><span>{claimed ? "输入家庭共享口令，继续查看同一套菜谱和冰箱。" : "创建后会预置 20 道两人份家常菜，家人用同一口令进入。"}</span></div><form className="auth-card" onSubmit={submit}>{claimed ? null : <><label>家庭名称<input value={name} maxLength={40} onChange={(event) => setName(event.target.value)} /></label><label>服务器初始化令牌<input type="password" autoComplete="off" value={setupToken} onChange={(event) => setSetupToken(event.target.value)} placeholder="由服务器管理员提供" /></label></>}<label>家庭共享口令<input type="password" autoComplete={claimed ? "current-password" : "new-password"} minLength={10} value={passcode} onChange={(event) => setPasscode(event.target.value)} placeholder="至少 10 个字符" /></label>{error ? <p className="form-error" role="alert">{error}</p> : null}<button className="primary-action" disabled={busy} type="submit">{busy ? "请稍候…" : claimed ? "进入家庭厨房" : "创建并进入"}</button></form><p className="privacy-note">公开网址，家庭数据仅在口令验证后返回。</p></main>;
+  return <main className="app-shell auth-shell"><div className="auth-brand"><p className="brand">好好吃饭</p><span>家庭下一顿决策助手</span></div><div className="auth-copy"><p>{creating ? "创建一间家庭厨房" : "欢迎回来"}</p><h1>{creating ? "以后，打开就有答案。" : "下一顿，别再纠结了。"}</h1><span>{creating ? "每个家庭拥有独立菜谱、冰箱和采购清单，创建后会预置 20 道两人份家常菜。" : "输入家庭名称和共享口令，继续查看同一套菜谱和冰箱。"}</span></div><div className="auth-mode-switch" aria-label="家庭入口"><button type="button" aria-pressed={!creating} onClick={() => switchMode("login")}>进入已有家庭</button><button type="button" aria-pressed={creating} onClick={() => switchMode("create")}>创建新家庭</button></div><form className="auth-card" onSubmit={submit}><label>家庭名称<input value={name} maxLength={40} onChange={(event) => setName(event.target.value)} /></label><label>家庭共享口令<input type="password" autoComplete={creating ? "new-password" : "current-password"} value={passcode} onChange={(event) => setPasscode(event.target.value)} placeholder="输入家庭共享口令" /></label>{error ? <p className="form-error" role="alert">{error}</p> : null}<button className="primary-action" disabled={busy} type="submit">{busy ? "请稍候…" : creating ? "创建并进入" : "进入家庭厨房"}</button></form><p className="privacy-note">家庭之间相互隔离，数据仅在名称和共享口令验证后返回。</p></main>;
 }
 
 function LoadingScreen() {
@@ -113,7 +133,7 @@ export function KitchenApp() {
         const cached = await loadCachedSnapshot();
         if (!active) return;
         if (cached) {
-          setBootstrap({ claimed: true, authenticated: true, snapshot: cached });
+          setBootstrap({ hasHouseholds: true, authenticated: true, snapshot: cached });
           setSnapshot(cached); setOnline(false); setNotice("离线 · 显示最近数据");
         } else {
           setError(reason instanceof Error ? reason.message : "连接失败");
@@ -215,7 +235,7 @@ export function KitchenApp() {
   }
 
   if (!bootstrap) return <>{error ? <div className="global-error">{error}</div> : null}<LoadingScreen /></>;
-  if (!bootstrap.authenticated || !snapshot) return <AuthGate claimed={bootstrap.claimed} onSuccess={refreshBootstrap} />;
+  if (!bootstrap.authenticated || !snapshot) return <AuthGate hasHouseholds={bootstrap.hasHouseholds} onSuccess={refreshBootstrap} />;
 
   const syncLabel = !online ? "离线 · 显示最近数据" : pendingCount ? `正在同步 ${pendingCount} 项` : "家庭已同步";
   return <main className="app-shell kitchen-shell"><header className="app-topbar"><div><p className="brand">好好吃饭</p><span>{new Date().toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "short" })}</span></div><span className="cloud-status">{syncLabel}</span></header>{error ? <div className="global-error" role="alert">{error}</div> : null}{notice ? <button className="notice" onClick={() => setNotice("")}>{notice}</button> : null}{renderContent()}<nav className="bottom-nav" aria-label="主要导航">{tabs.map((item) => <button aria-current={tab === item.id ? "page" : undefined} key={item.id} onClick={() => { setTab(item.id); setNotice(""); }}><span>{item.icon}</span>{item.label}</button>)}</nav></main>;

@@ -20,7 +20,8 @@ test("exports every household-scoped table", () => {
 });
 
 test("uses PostgreSQL-native household and serving columns", () => {
-  assert.ok(schema.households.instanceKey);
+  assert.equal("instanceKey" in schema.households, false);
+  assert.ok(schema.households.name);
   assert.ok(schema.households.dataEpoch);
   assert.ok(schema.households.passcodeHash);
   assert.ok(schema.dishes.baseServings);

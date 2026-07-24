@@ -23,9 +23,11 @@ test("session tokens are random and only their digest is persisted", async () =>
   assert.equal(Buffer.from(first.token, "base64url").byteLength, 32);
 });
 
-test("enforces a bounded family passcode", () => {
-  assert.equal(validatePasscode("123456789"), "家庭口令至少需要 10 个字符");
-  assert.equal(validatePasscode("          "), "家庭口令至少需要 10 个字符");
-  assert.equal(validatePasscode("family-2026"), null);
-  assert.equal(validatePasscode("x".repeat(129)), "家庭口令不能超过 128 个字符");
+test("accepts any non-blank family passcode without composition or length rules", () => {
+  assert.equal(validatePasscode(""), "请输入家庭共享口令");
+  assert.equal(validatePasscode("          "), "请输入家庭共享口令");
+  assert.equal(validatePasscode("1"), null);
+  assert.equal(validatePasscode("a"), null);
+  assert.equal(validatePasscode("A"), null);
+  assert.equal(validatePasscode("x".repeat(1024)), null);
 });

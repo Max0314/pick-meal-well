@@ -1,20 +1,21 @@
 import { getOptionalHouseholdSession } from "../../lib/auth/session";
 import {
   getHouseholdSnapshot,
-  getSingletonHousehold,
+  hasAnyHousehold,
 } from "../../lib/server/repository";
 import { cacheSnapshot, getCachedSnapshot } from "../../lib/server/redis";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const [household, session] = await Promise.all([
-    getSingletonHousehold(),
-    getOptionalHouseholdSession(),
-  ]);
+  const session = await getOptionalHouseholdSession();
   if (!session) {
     return Response.json(
-      { claimed: Boolean(household), authenticated: false, snapshot: null },
+      {
+        hasHouseholds: await hasAnyHousehold(),
+        authenticated: false,
+        snapshot: null,
+      },
       { headers: { "cache-control": "no-store" } },
     );
   }
@@ -24,7 +25,7 @@ export async function GET() {
     await cacheSnapshot(session.householdId, snapshot);
   }
   return Response.json(
-    { claimed: true, authenticated: true, snapshot },
+    { hasHouseholds: true, authenticated: true, snapshot },
     { headers: { "cache-control": "no-store" } },
   );
 }

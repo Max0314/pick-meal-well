@@ -1,6 +1,10 @@
 import { requireHouseholdSession, SessionError } from "../../lib/auth/session";
 import { validateKitchenMutation } from "../../lib/mutations";
-import { applyMutation, StaleMutationError } from "../../lib/server/repository";
+import {
+  applyMutation,
+  HouseholdNameConflictError,
+  StaleMutationError,
+} from "../../lib/server/repository";
 import { cacheSnapshot, invalidateSnapshot } from "../../lib/server/redis";
 import {
   readJsonBody,
@@ -32,6 +36,9 @@ export async function POST(request: Request) {
       return Response.json({ error: error.message }, { status: error.status });
     }
     if (error instanceof StaleMutationError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof HouseholdNameConflictError) {
       return Response.json({ error: error.message }, { status: error.status });
     }
     throw error;

@@ -27,18 +27,42 @@ export class StaleMutationError extends Error {
   status = 409;
 }
 
+export class HouseholdNameConflictError extends Error {
+  status = 409;
+}
+
 function iso(value: Date | null): string | null {
   return value?.toISOString() ?? null;
 }
 
-export async function getSingletonHousehold() {
+export async function hasAnyHousehold(): Promise<boolean> {
+  const [household] = await getDb()
+    .select({ id: households.id })
+    .from(households)
+    .limit(1);
+  return Boolean(household);
+}
+
+export async function getHouseholdByName(name: string) {
   const [household] = await getDb()
     .select({
       id: households.id,
       passcodeHash: households.passcodeHash,
     })
     .from(households)
-    .where(eq(households.instanceKey, "default"))
+    .where(eq(households.name, name))
+    .limit(1);
+  return household ?? null;
+}
+
+export async function getHouseholdCredentials(householdId: string) {
+  const [household] = await getDb()
+    .select({
+      id: households.id,
+      passcodeHash: households.passcodeHash,
+    })
+    .from(households)
+    .where(eq(households.id, householdId))
     .limit(1);
   return household ?? null;
 }
@@ -542,13 +566,20 @@ export async function applyMutation(
         });
         break;
       case "settings.update":
-        await tx.update(households).set({
-          name: mutation.payload.name,
-          defaultPeople: mutation.payload.defaultPeople,
-          defaultMaxMinutes: mutation.payload.defaultMaxMinutes,
-          defaultTaste: mutation.payload.defaultTaste,
-          updatedAt: new Date(),
-        }).where(eq(households.id, householdId));
+        try {
+          await tx.update(households).set({
+            name: mutation.payload.name,
+            defaultPeople: mutation.payload.defaultPeople,
+            defaultMaxMinutes: mutation.payload.defaultMaxMinutes,
+            defaultTaste: mutation.payload.defaultTaste,
+            updatedAt: new Date(),
+          }).where(eq(households.id, householdId));
+        } catch (error) {
+          if ((error as { code?: string }).code === "23505") {
+            throw new HouseholdNameConflictError("家庭名称已存在，请更换名称");
+          }
+          throw error;
+        }
         break;
     }
 
