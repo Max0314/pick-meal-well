@@ -14,7 +14,18 @@ export function requireSameOrigin(request: Request): void {
   if (!origin) throw new RequestError("缺少请求来源", 403);
   let expected: string;
   try {
-    expected = new URL(request.url).origin;
+    const requestUrl = new URL(request.url);
+    const forwardedProtocol = request.headers.get("x-forwarded-proto")
+      ?.split(",")[0]
+      ?.trim();
+    const forwardedHost = request.headers.get("x-forwarded-host")
+      ?.split(",")[0]
+      ?.trim();
+    const protocol = forwardedProtocol || requestUrl.protocol.replace(/:$/u, "");
+    const host = forwardedHost || request.headers.get("host");
+    expected = host
+      ? new URL(`${protocol}://${host}`).origin
+      : requestUrl.origin;
   } catch {
     throw new RequestError("请求地址无效", 400);
   }

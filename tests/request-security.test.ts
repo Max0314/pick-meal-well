@@ -28,6 +28,30 @@ test("accepts a same-origin request addressed through a LAN IP", () => {
   requireSameOrigin(request);
 });
 
+test("uses the external host when the standalone server has an internal request URL", () => {
+  const request = new Request("http://localhost:3000/api/auth/claim", {
+    method: "POST",
+    headers: {
+      host: "192.168.111.2:21001",
+      origin: "http://192.168.111.2:21001",
+    },
+  });
+  requireSameOrigin(request);
+});
+
+test("uses trusted reverse-proxy host and protocol for HTTPS", () => {
+  const request = new Request("http://localhost:3000/api/auth/login", {
+    method: "POST",
+    headers: {
+      host: "localhost:3000",
+      origin: "https://meal.example",
+      "x-forwarded-host": "meal.example",
+      "x-forwarded-proto": "https",
+    },
+  });
+  requireSameOrigin(request);
+});
+
 test("rejects cross-origin writes", () => {
   const request = new Request("https://meal.example/api/mutations", {
     method: "POST",
