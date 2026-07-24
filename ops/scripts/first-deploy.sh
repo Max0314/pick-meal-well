@@ -57,6 +57,7 @@ create_secret() {
 create_secret "${secret_dir}/postgres_owner_password"
 create_secret "${secret_dir}/postgres_app_password"
 create_secret "${secret_dir}/redis_password"
+rm -f -- "${secret_dir}/setup_token"
 
 owner_password="$(<"${secret_dir}/postgres_owner_password")"
 app_password="$(<"${secret_dir}/postgres_app_password")"

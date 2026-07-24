@@ -26,7 +26,8 @@ redis_url:              redis://:<URL 编码后的密码>@redis:6379/0
 三个密码都应独立随机生成。应用账户只有业务表 CRUD 权限；owner 连接串只挂载到迁移容器。
 迁移容器额外挂载应用账户密码，用于在每次迁移前幂等创建或同步应用角色与默认权限，并在
 迁移后补授现有表和序列权限；应用容器不会获得 owner 连接串或明文应用账户密码。
-创建家庭不依赖服务器初始化令牌。
+创建家庭不依赖服务器初始化令牌；发布脚本会精确删除旧版本遗留的
+`/etc/fribench/setup_token`。
 
 Compose 的 file-backed Secret 底层是 bind mount，不能用 `uid`、`gid`、`mode` 长语法
 重映射权限。首发脚本因此创建固定 GID `1999` 的 `fribench-secrets` 组，将 Secret 设为
