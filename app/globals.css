@@ -62,6 +62,42 @@ textarea {
   box-shadow: var(--shadow);
 }
 
+.filing-footer {
+  display: flex;
+  width: min(100%, 430px);
+  margin: 0 auto;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+  background: var(--cream);
+  color: var(--olive-soft);
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.filing-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.filing-footer img {
+  width: 16px;
+  height: 17px;
+  object-fit: contain;
+}
+
+.filing-footer a:hover {
+  color: var(--tomato);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .brand {
   display: inline-block;
   margin: 0;

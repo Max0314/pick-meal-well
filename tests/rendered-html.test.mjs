@@ -41,6 +41,11 @@ test("ships the approved 好好吃饭 application copy", async () => {
   assert.match(layout, /generateMetadata/);
   assert.match(layout, /\/og\.png/);
   assert.match(layout, /summary_large_image/);
+  assert.match(layout, /渝ICP备2026016967号-1/);
+  assert.match(layout, /https:\/\/beian\.miit\.gov\.cn\//);
+  assert.match(layout, /渝公网安备 50010502504754号/);
+  assert.match(layout, /https:\/\/beian\.mps\.gov\.cn\/#\/query\/webSearch\?code=50010502504754/);
+  assert.match(layout, /className="filing-footer"/);
 });
 
 test("removes every disposable starter artifact", async () => {
