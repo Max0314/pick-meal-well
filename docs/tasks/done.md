@@ -20,3 +20,12 @@
 - 提交: `be7afbc`、`b552610`、`27262d3`、`de3d6a4`
 - 结果: 取消服务器初始化令牌和单家庭约束；支持按家庭名称与共享口令创建、登录多套隔离家庭；共享口令仅要求非空；动态同源校验支持任意 IP、主机名和可信反代入口，同时保留 CSRF 防护。
 - 验证: `npm run verify`、生产 UI smoke、迁移/回滚 review 均通过；服务器 release `de3d6a4` 健康；经 `192.168.111.99:21001` 真实创建两套家庭，各自预置 20 道菜，单字符口令、错误口令拒绝和重新登录均通过，测试数据已清理。
+
+## 统一正式部署目录
+
+- Issue: 未创建
+- 状态: done
+- 分支: `codex/unified-server-paths`
+- 提交: 本条目所在的 `fix: use unified production directory` 提交
+- 结果: 部署脚本、systemd 单元和文档统一使用 `/srv/fribench/apps/pick-meal-well`，契约测试拒绝旧的 `apps/web` 路径。
+- 验证: Node 24 下 `npm run verify` 通过；服务器 shell、Compose 与 systemd 配置校验通过；手工备份服务返回 `success/0`，新备份 SHA-256 校验为 `OK`。
