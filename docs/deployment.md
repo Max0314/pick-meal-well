@@ -51,7 +51,7 @@ sudo install -m 0644 ops/config/pick-meal-well.env.example /etc/fribench/pick-me
 每个版本放入独立目录，并让 `current` 指向待发布版本。以下命令不会开放公网端口：
 
 ```bash
-cd /srv/fribench/apps/web/pick-meal-well/current
+cd /srv/fribench/apps/pick-meal-well/current
 sudo docker compose -f compose.prod.yml config --quiet
 sudo docker compose -f compose.prod.yml build --pull
 sudo docker compose -f compose.prod.yml up -d
@@ -73,7 +73,7 @@ Compose 项目、内部后端网络和应用 edge 网络均使用应用专用名
 首次部署可在 `current` 已指向待发布版本后运行：
 
 ```bash
-cd /srv/fribench/apps/web/pick-meal-well/current
+cd /srv/fribench/apps/pick-meal-well/current
 sudo ops/scripts/first-deploy.sh "$PWD"
 ```
 
@@ -115,7 +115,7 @@ sudo systemctl start pick-meal-well-backup.service
 
 ```bash
 sudo CONFIRM_RESTORE=RESTORE \
-  /srv/fribench/apps/web/pick-meal-well/current/ops/scripts/restore-postgres.sh \
+  /srv/fribench/apps/pick-meal-well/current/ops/scripts/restore-postgres.sh \
   /srv/fribench/backups/<backup>.sql.gz
 ```
 

@@ -128,9 +128,14 @@ test("isolates the app from the legacy platform and uses the server path contrac
   );
 
   for (const asset of [deployment, backup, restore, backupService]) {
-    assert.match(asset, /\/srv\/fribench\/apps\/web\/pick-meal-well\/current/);
-    assert.doesNotMatch(asset, /\/srv\/fribench\/apps\/pick-meal-well\/current/);
+    assert.match(asset, /\/srv\/fribench\/apps\/pick-meal-well\/current/);
+    assert.doesNotMatch(asset, /\/srv\/fribench\/apps\/web\/pick-meal-well\/current/);
   }
+
+  assert.match(
+    firstDeploy,
+    /release_dir="\$\{1:-\/srv\/fribench\/apps\/pick-meal-well\/current\}"/,
+  );
 
   assert.doesNotMatch(deployment, /install .*\/srv\/fribench\/ops\/backup-postgres\.sh/);
   assert.match(deployment, /sites-enabled\/fribench-private-status/);

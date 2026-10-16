@@ -6,7 +6,7 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 2
 fi
 
-release_dir="${1:-/srv/fribench/apps/web/pick-meal-well/current}"
+release_dir="${1:-/srv/fribench/apps/pick-meal-well/current}"
 release_dir="$(readlink -f "${release_dir}")"
 compose_file="${release_dir}/compose.prod.yml"
 secret_dir="/etc/fribench"
