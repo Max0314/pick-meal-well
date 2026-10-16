@@ -844,3 +844,13 @@ button:disabled {
     transition-duration: 0.01ms !important;
   }
 }
+
+.unified-access { display:grid; gap:12px; margin-block:18px; }
+.unified-access p { line-height:1.7; margin:0; }
+.unified-access button { min-height:44px; padding:10px 14px; border:1px solid #acb497; border-radius:12px; cursor:pointer; }
+.unified-access button:disabled { opacity:.55; cursor:default; }
+.unified-access input { width:100%; min-height:44px; }
+.unified-login-link { text-align:center; padding:12px; text-decoration:underline; }
+.legacy-family { margin-top:22px; }
+.legacy-family .auth-shell { padding:12px; min-height:0; }
+@media(max-width:600px){input,select,textarea{font-size:16px!important;}}

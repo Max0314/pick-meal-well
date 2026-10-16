@@ -1,5 +1,7 @@
 # 架构
 
+2026-10-16 统一账号升级见 [统一登录与家庭空间](unified-login.md)。该文档优先于以下历史共享口令描述：正式入口是 `https://meal.fribench.cn`，Fribench 身份通过专用内部网络查询；原 PostgreSQL/Redis 网络、卷和角色保留。游客无需注册，账号家庭通过成员关系授权，正式来源固定且 Cookie 为 Secure。
+
 ## 决策
 
 前端和业务 API 保持在同一个 Next.js standalone 容器，PostgreSQL 与 Redis 使用独立容器。当前家庭规模下，单独拆出前端容器和 API 容器会增加跨域、会话、发布顺序与监控成本，却没有独立扩缩容收益。Next.js 在这里承担 BFF：浏览器只访问一个同源入口，业务数据始终经由服务端 API。

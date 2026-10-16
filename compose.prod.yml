@@ -69,6 +69,7 @@ services:
     logging: *default-logging
 
   migrate:
+    image: fribench-pick-meal-well-migrate:${PMW_VERSION:?Set an immutable source commit}
     build:
       context: .
       target: migrator
@@ -91,6 +92,7 @@ services:
     logging: *default-logging
 
   app:
+    image: fribench-pick-meal-well:${PMW_VERSION:?Set an immutable source commit}
     build:
       context: .
       target: runner
@@ -98,14 +100,18 @@ services:
     restart: unless-stopped
     env_file:
       - /etc/fribench/pick-meal-well.env
+      - /etc/fribench/apps/pick-meal-well/app.env
     environment:
       DATABASE_URL_FILE: /run/secrets/database_url
       REDIS_URL_FILE: /run/secrets/redis_url
+      SESSION_COOKIE_SECURE: "true"
+      PUBLIC_ORIGIN: https://meal.fribench.cn
     secrets: *app-secrets
     group_add: *secret-groups
     networks:
       - backend
       - edge
+      - identity
     ports:
       - "127.0.0.1:21001:3000"
     depends_on:
@@ -124,6 +130,9 @@ services:
       retries: 5
       start_period: 20s
     read_only: true
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
     tmpfs:
       - /tmp:size=64m,noexec,nosuid
     cap_drop:
@@ -133,6 +142,9 @@ services:
     logging: *default-logging
 
 networks:
+  identity:
+    external: true
+    name: fribench-services-edge-v1
   backend:
     name: fribench-pick-meal-well-backend-v1
     internal: true

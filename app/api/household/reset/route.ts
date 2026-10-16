@@ -1,5 +1,5 @@
 import { verifyPasscode } from "../../../lib/auth/crypto";
-import { requireHouseholdSession, SessionError } from "../../../lib/auth/session";
+import { requireHouseholdSession, SessionError,guestProof } from "../../../lib/auth/session";
 import {
   getHouseholdCredentials,
   resetHouseholdData,
@@ -21,6 +21,7 @@ export async function POST(request: Request) {
   try {
     requireSameOrigin(request);
     const session = await requireHouseholdSession();
+    if(session.role==='member')return Response.json({error:'只有家庭所有者可以重置数据'},{status:403});
     const address = clientAddress(request);
     const scope = `reset:${session.householdId}`;
     const rate = await getRateLimit(scope, address, 3);
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
     if (
       household?.id !== session.householdId ||
       payload.confirmation !== "RESET" ||
-      !await verifyPasscode(payload.passcode ?? "", household.passcodeHash)
+      (session.role==='legacy'&&!await verifyPasscode(payload.passcode ?? "", household.passcodeHash))
     ) {
       const failure = await consumeRateLimit(scope, address, 3, 3_600);
       if (!failure.allowed) {
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "口令或确认文字不正确" }, { status: 403 });
     }
     await clearRateLimit(scope, address);
-    const snapshot = await resetHouseholdData(session.householdId);
+    const snapshot = await resetHouseholdData(session.householdId,session.role==='guest'?await guestProof():undefined);
     await invalidateSnapshot(session.householdId);
     return Response.json({ ok: true, snapshot });
   } catch (error) {

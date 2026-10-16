@@ -32,6 +32,7 @@ export const households = pgTable("households", {
   defaultMaxMinutes: integer("default_max_minutes").notNull().default(30),
   defaultTaste: text("default_taste").notNull().default("下饭"),
   version: bigint("version", { mode: "number" }).notNull().default(1),
+  isGuest: boolean("is_guest").notNull().default(false),
   ...timestamps,
 }, (table) => [
   uniqueIndex("households_name_idx").on(table.name),
@@ -218,3 +219,21 @@ export const mutationReceipts = pgTable("mutation_receipts", {
   primaryKey({ name: "mutation_receipts_pk", columns: [table.householdId, table.id] }),
   index("mutation_receipts_household_created_idx").on(table.householdId, table.createdAt),
 ]);
+
+export const householdMembers = pgTable('household_members', {
+  accountId:text('account_id').notNull(),
+  householdId:uuid('household_id').notNull().references(()=>households.id,{onDelete:'cascade'}),
+  role:text('role').notNull(),createdAt:timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),
+},table=>[primaryKey({columns:[table.accountId,table.householdId]}),index('household_members_household_idx').on(table.householdId),check('household_members_role_check',sql`${table.role} in ('owner','member')`)]);
+export const accountSelections=pgTable('account_selections',{
+  accountId:text('account_id').primaryKey(),householdId:uuid('household_id').notNull(),
+},table=>[foreignKey({columns:[table.accountId,table.householdId],foreignColumns:[householdMembers.accountId,householdMembers.householdId]}).onDelete('cascade')]);
+export const accountGuestClaims=pgTable('account_guest_claims',{
+  accountId:text('account_id').primaryKey(),householdId:uuid('household_id').notNull().references(()=>households.id,{onDelete:'restrict'}),
+  previewHash:text('preview_hash').notNull(),completedAt:timestamp('completed_at',{withTimezone:true}).notNull().defaultNow(),
+},table=>[uniqueIndex('account_guest_claims_household_idx').on(table.householdId)]);
+export const householdInvites=pgTable('household_invites',{
+  tokenHash:text('token_hash').primaryKey(),householdId:uuid('household_id').notNull().references(()=>households.id,{onDelete:'cascade'}),
+  createdBy:text('created_by').notNull(),expiresAt:timestamp('expires_at',{withTimezone:true}).notNull(),
+  uses:integer('uses').notNull().default(0),maxUses:integer('max_uses').notNull().default(10),
+},table=>[check('household_invites_uses_check',sql`${table.uses} >= 0 and ${table.maxUses} between 1 and 20`)]);

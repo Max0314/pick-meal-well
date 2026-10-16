@@ -22,7 +22,7 @@
   "dependencies": {
     "argon2": "0.45.1",
     "drizzle-orm": "0.45.2",
-    "next": "16.2.11",
+    "next": "16.4.2",
     "pg": "8.22.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
@@ -39,15 +39,17 @@
     "@types/react-dom": "19.2.3",
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.2.11",
+    "eslint-config-next": "16.4.2",
+    "fake-indexeddb": "6.2.5",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3"
   },
   "overrides": {
     "next": {
-      "postcss": "8.5.22",
-      "sharp": "0.35.3"
-    }
+      "postcss": "8.5.30",
+      "sharp": "0.35.5"
+    },
+    "esbuild": "0.25.12"
   },
   "type": "module"
 }

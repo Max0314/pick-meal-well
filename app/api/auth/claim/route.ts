@@ -1,5 +1,6 @@
 import { getDb } from "../../../../db";
-import { households } from "../../../../db/schema";
+import { households,householdMembers,accountSelections } from "../../../../db/schema";
+import {currentAccount} from '../../../lib/auth/account';
 import { derivePasscode, validatePasscode } from "../../../lib/auth/crypto";
 import { createHouseholdSession } from "../../../lib/auth/session";
 import { consumeRateLimit } from "../../../lib/server/redis";
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
     if (passcodeError) return Response.json({ error: passcodeError }, { status: 400 });
 
     const householdId = crypto.randomUUID();
+    const account=await currentAccount();
     const passcodeHash = await derivePasscode(passcode);
     try {
       await getDb().transaction(async (tx) => {
@@ -43,6 +45,7 @@ export async function POST(request: Request) {
           passcodeHash,
         });
         await seedHousehold(tx, householdId);
+        if(account){await tx.insert(householdMembers).values({accountId:account.sub,householdId,role:'owner'});await tx.insert(accountSelections).values({accountId:account.sub,householdId}).onConflictDoUpdate({target:accountSelections.accountId,set:{householdId}});}
       });
     } catch (error) {
       if ((error as { code?: string }).code === "23505") {

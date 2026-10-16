@@ -296,6 +296,7 @@ async function addOrMergeShopping(
 export async function applyMutation(
   householdId: string,
   mutation: KitchenMutation,
+  guestProof?:string,
 ): Promise<{ applied: boolean; snapshot: KitchenSnapshot }> {
   const db = getDb();
   const applied = await db.transaction(async (tx) => {
@@ -305,6 +306,7 @@ export async function applyMutation(
       .where(eq(households.id, householdId))
       .limit(1)
       .for("update");
+    if(guestProof){const proof=await tx.execute(sql`SELECT 1 FROM sessions s JOIN households h ON h.id=s.household_id WHERE s.household_id=${householdId} AND s.token_digest=${guestProof} AND s.expires_at>now() AND h.is_guest=true`);if(!proof.rows.length)throw new StaleMutationError('游客授权已变化，未应用本次修改');}
     if (!household || household.dataEpoch !== mutation.dataEpoch) {
       throw new StaleMutationError("家庭数据已在另一台设备重置，请退出后重新进入");
     }
@@ -593,12 +595,13 @@ export async function applyMutation(
   return { applied, snapshot: await getHouseholdSnapshot(householdId) };
 }
 
-export async function resetHouseholdData(householdId: string): Promise<KitchenSnapshot> {
+export async function resetHouseholdData(householdId: string,guestProof?:string): Promise<KitchenSnapshot> {
   await getDb().transaction(async (tx) => {
     await tx.select({ id: households.id }).from(households)
       .where(eq(households.id, householdId))
       .limit(1)
       .for("update");
+    if(guestProof){const proof=await tx.execute(sql`SELECT 1 FROM sessions s JOIN households h ON h.id=s.household_id WHERE s.household_id=${householdId} AND s.token_digest=${guestProof} AND s.expires_at>now() AND h.is_guest=true`);if(!proof.rows.length)throw new StaleMutationError('游客授权已变化，未重置任何数据');}
     await tx.delete(mutationReceipts).where(eq(mutationReceipts.householdId, householdId));
     await tx.delete(mealDecisions).where(eq(mealDecisions.householdId, householdId));
     await tx.delete(shoppingItems).where(eq(shoppingItems.householdId, householdId));

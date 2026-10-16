@@ -1,5 +1,7 @@
 # 生产部署
 
+2026-10-16 统一账号增量发布以 [统一登录部署说明](unified-login.md) 为准。下文包含首次部署的历史流程；现有正式实例不要重新初始化 Secret/卷或执行旧 `first-deploy.sh`。发布设置 `PMW_VERSION=<完整提交>`，仅构建 app/migrate、运行增量迁移并以 `up -d --no-deps --no-build app` 更新应用；正式来源固定为 `https://meal.fribench.cn`，Secure Cookie 不可关闭。当前生产路径为 `/srv/fribench/apps/pick-meal-well/releases/<提交>`，旧 `apps/web` 示例不代表现状。
+
 目标主机为 Ubuntu 24.04、Docker Engine 29、Compose 5、宿主机 Nginx。应用使用一个 Next.js 容器，PostgreSQL 和 Redis 各自独立；数据库与缓存不映射宿主机端口。
 
 ## 1. 准备 Secret

@@ -12,6 +12,7 @@ export class RequestError extends Error {
 export function requireSameOrigin(request: Request): void {
   const origin = request.headers.get("origin");
   if (!origin) throw new RequestError("缺少请求来源", 403);
+  if(process.env.PUBLIC_ORIGIN){if(origin!==new URL(process.env.PUBLIC_ORIGIN).origin)throw new RequestError('请求来源不受信任',403);return;}
   let expected: string;
   try {
     const requestUrl = new URL(request.url);

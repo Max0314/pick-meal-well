@@ -1,10 +1,11 @@
 import "server-only";
 
-import { and, eq, gt, lt } from "drizzle-orm";
+import { and, eq, gt, lt,sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { getDb } from "../../../db";
-import { sessions } from "../../../db/schema";
+import { sessions,households } from "../../../db/schema";
 import { createSessionToken, digestSessionToken } from "./crypto";
+import {currentAccount,accountRepository} from './account';
 
 const SESSION_DAYS = 30;
 
@@ -15,12 +16,13 @@ function secureCookieEnabled(): boolean {
 function cookieName(): string {
   return secureCookieEnabled() ? "__Host-pmw_session" : "pmw_session";
 }
+export async function guestProof(){const token=(await cookies()).get(cookieName())?.value;return token?digestSessionToken(token):'';}
 
 export class SessionError extends Error {
   status = 401;
 }
 
-export type HouseholdSession = { householdId: string; sessionId: string };
+export type HouseholdSession = { householdId: string; sessionId: string;role:'owner'|'member'|'guest'|'legacy';accountId?:string };
 
 export async function createHouseholdSession(householdId: string): Promise<void> {
   const db = getDb();
@@ -47,6 +49,8 @@ export async function createHouseholdSession(householdId: string): Promise<void>
 }
 
 export async function getOptionalHouseholdSession(): Promise<HouseholdSession | null> {
+  const account=await currentAccount();
+  if(account){const member=await accountRepository().selected(account.sub);return member?{householdId:member.householdId,sessionId:'account',role:member.role,accountId:account.sub}:null;}
   const cookieStore = await cookies();
   const token = cookieStore.get(cookieName())?.value;
   if (!token) return null;
@@ -54,7 +58,8 @@ export async function getOptionalHouseholdSession(): Promise<HouseholdSession | 
   const [row] = await getDb().select({
     id: sessions.id,
     householdId: sessions.householdId,
-  }).from(sessions).where(and(
+    isGuest:households.isGuest,
+  }).from(sessions).innerJoin(households,eq(households.id,sessions.householdId)).where(and(
     eq(sessions.tokenDigest, digest),
     gt(sessions.expiresAt, new Date()),
   )).limit(1);
@@ -62,10 +67,12 @@ export async function getOptionalHouseholdSession(): Promise<HouseholdSession | 
     cookieStore.delete(cookieName());
     return null;
   }
+  const owned=await getDb().execute<{id:string}>(sql`SELECT household_id AS id FROM household_members WHERE household_id=${row.householdId} LIMIT 1`);
+  if(owned.rows.length)return null;
   await getDb().update(sessions)
     .set({ lastUsedAt: new Date() })
     .where(eq(sessions.id, row.id));
-  return { householdId: row.householdId, sessionId: row.id };
+  return { householdId: row.householdId, sessionId: row.id,role:row.isGuest?'guest':'legacy' };
 }
 
 export async function requireHouseholdSession(): Promise<HouseholdSession> {

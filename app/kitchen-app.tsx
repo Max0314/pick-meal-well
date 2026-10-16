@@ -6,6 +6,7 @@ import { FridgeView } from "./components/fridge-view";
 import { ProfileView } from "./components/profile-view";
 import { RecipesView } from "./components/recipes-view";
 import { ShoppingView } from "./components/shopping-view";
+import {UnifiedKitchenAccess} from './components/unified-kitchen-access';
 import {
   ApiError,
   claimHousehold,
@@ -26,6 +27,7 @@ import {
   loadQueuedMutations,
   RetryableSyncError,
   saveCachedSnapshot,
+  setStorageContext,
 } from "./lib/offline-store";
 import type {
   InventoryInput,
@@ -51,7 +53,7 @@ function mealFromTime(): MealType {
 
 type AuthMode = "login" | "create";
 
-function AuthGate({
+function LegacyAuthGate({
   hasHouseholds,
   onSuccess,
 }: {
@@ -88,12 +90,20 @@ function LoadingScreen() {
   return <main className="app-shell loading-shell"><p className="brand">好好吃饭</p><div><p className="decision-kicker">下一顿 · 正在准备</p><h1>先别纠结，马上给你一个答案。</h1><span>正在连接家庭厨房…</span></div></main>;
 }
 
+function AuthGate({hasHouseholds,onSuccess}:{hasHouseholds:boolean;onSuccess:()=>Promise<void>}){
+  return <div className="app-shell auth-shell"><p className="brand">好好吃饭</p><h1>下一顿，别再纠结了。</h1><UnifiedKitchenAccess onEnter={onSuccess}/><details className="legacy-family"><summary>兼容旧家庭（可选）</summary><LegacyAuthGate hasHouseholds={hasHouseholds} onSuccess={onSuccess}/></details></div>;
+}
+
 function retryableRequest(reason: unknown): boolean {
   return reason instanceof TypeError ||
     (reason instanceof ApiError && reason.status >= 500);
 }
 
 export function KitchenApp() {
+  useEffect(()=>{
+    const changed=(event:Event)=>{const detail=(event as CustomEvent<{authenticated:boolean;accountKey?:string}>).detail;const next=detail?.authenticated?detail.accountKey??'pending':'guest';let previous='guest';try{previous=localStorage.getItem('pmw.account-key')??'guest';localStorage.setItem('pmw.account-key',next);}catch{}if(previous!==next){setStorageContext('pending');location.reload();}};
+    window.addEventListener('fribench:account-change',changed);return()=>window.removeEventListener('fribench:account-change',changed);
+  },[]);
   const [bootstrap, setBootstrap] = useState<BootstrapResponse | null>(null);
   const [snapshot, setSnapshot] = useState<KitchenSnapshot | null>(null);
   const [tab, setTab] = useState<Tab>("home");
@@ -231,7 +241,7 @@ export function KitchenApp() {
     if (tab === "fridge") return <FridgeView snapshot={snapshot} onAdd={(payload: InventoryInput) => mutate({ id: crypto.randomUUID(), type: "inventory.upsert", payload }).then(() => undefined)} onConsume={(id) => mutate({ id: crypto.randomUUID(), type: "inventory.consume", payload: { id } }).then(() => undefined)} />;
     if (tab === "recipes") return <RecipesView snapshot={snapshot} onSave={(payload: Dish) => mutate({ id: crypto.randomUUID(), type: "dish.upsert", payload }).then(() => undefined)} onDisable={(id) => mutate({ id: crypto.randomUUID(), type: "dish.disable", payload: { id } }).then(() => undefined)} />;
     if (tab === "shopping") return <ShoppingView snapshot={snapshot} onAdd={(payload: ShoppingInput) => mutate({ id: crypto.randomUUID(), type: "shopping.add", payload }).then(() => undefined)} onToggle={(id, checked) => mutate({ id: crypto.randomUUID(), type: "shopping.toggle", payload: { id, checked } }).then(() => undefined)} onStock={(ids) => mutate({ id: crypto.randomUUID(), type: "shopping.stock", payload: { ids } }).then(() => undefined)} />;
-    return <ProfileView snapshot={snapshot} onSettings={(payload: HouseholdSettings) => mutate({ id: crypto.randomUUID(), type: "settings.update", payload }).then(() => undefined)} onReset={async (passcode, confirmation) => { const result = await resetHousehold(passcode, confirmation); await clearLocalData(); setPendingCount(0); setSnapshot(result.snapshot); setRecommendation(null); setExcludedDishIds([]); setAccepted(false); setRefreshingRecommendation(true); setNotice("已恢复初始示例数据。"); }} onLogout={async () => { if (pendingCount > 0 && !window.confirm("仍有离线修改未同步，退出会放弃这些修改。仍要退出吗？")) return; await logoutHousehold(); await clearLocalData(); setPendingCount(0); setSnapshot(null); await refreshBootstrap(); }} />;
+    return <ProfileView role={bootstrap?.role??"legacy"} snapshot={snapshot} onSettings={(payload: HouseholdSettings) => mutate({ id: crypto.randomUUID(), type: "settings.update", payload }).then(() => undefined)} onReset={async (passcode, confirmation) => { const result = await resetHousehold(passcode, confirmation); await clearLocalData(); setPendingCount(0); setSnapshot(result.snapshot); setRecommendation(null); setExcludedDishIds([]); setAccepted(false); setRefreshingRecommendation(true); setNotice("已恢复初始示例数据。"); }} onLogout={async () => { if (pendingCount > 0 && !window.confirm("仍有离线修改未同步，退出会放弃这些修改。仍要退出吗？")) return; await logoutHousehold(); await clearLocalData(); setPendingCount(0); setSnapshot(null); await refreshBootstrap(); }} />;
   }
 
   if (!bootstrap) return <>{error ? <div className="global-error">{error}</div> : null}<LoadingScreen /></>;

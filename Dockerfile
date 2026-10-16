@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM node:24.18.0-bookworm-slim AS base
+FROM node:24.21.0-bookworm-slim AS base
 ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 
@@ -30,7 +30,7 @@ COPY scripts ./scripts
 USER node
 CMD ["npm", "run", "db:migrate"]
 
-FROM node:24.18.0-bookworm-slim AS runner
+FROM node:24.21.0-bookworm-slim AS runner
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     HOSTNAME=0.0.0.0 \

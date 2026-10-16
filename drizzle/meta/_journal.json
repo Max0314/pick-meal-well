@@ -15,6 +15,13 @@
       "when": 1784878518309,
       "tag": "0001_parallel_human_cannonball",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792121187451,
+      "tag": "0002_spooky_nocturne",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
+import Script from 'next/script';
+import Image from 'next/image';
 import "./globals.css";
 
 const title = "好好吃饭 · 下一顿吃什么";
@@ -51,6 +53,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body>
+        <Script src="/_fribench/client.js" strategy="afterInteractive" />
         {children}
         <footer className="filing-footer">
           <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">
@@ -61,7 +64,7 @@ export default function RootLayout({
             target="_blank"
             rel="noreferrer"
           >
-            <img
+            <Image unoptimized
               src="https://beian.mps.gov.cn/web/assets/logo01.6189a29f.png"
               alt=""
               width="16"
