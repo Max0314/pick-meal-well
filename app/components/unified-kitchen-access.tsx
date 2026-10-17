@@ -8,7 +8,7 @@ export function UnifiedKitchenAccess({onEnter,inKitchen=false}:{onEnter?:()=>Pro
   useEffect(()=>{let active=true;void getAccount().then(value=>{if(active)setAccount(value);}).catch(()=>{});return()=>{active=false;};},[]);
   const enter=async()=>{if(onEnter)await onEnter();else{setStorageContext('pending');location.reload();}};
   const run=async(work:()=>Promise<void>)=>{if(busy)return;setBusy(true);setError('');try{await work();}catch(error){setError(error instanceof Error?error.message:'暂时无法完成操作');}finally{setBusy(false);}};
-  return <section className="settings-card unified-access" aria-label="统一账号与家庭空间">
+  return <section className="settings-card unified-access" aria-label="统一账号与家庭空间" data-account-controls>
     <h2>{account?.signedIn?'账号与家庭空间':'先体验，按需登录'}</h2>
     {!account?.signedIn?<><p>无需注册即可使用推荐、菜谱、冰箱和采购。游客数据保留在当前浏览器对应的厨房。</p>{!inKitchen?<button className="primary-action" disabled={busy} onClick={()=>void run(async()=>{await accountAction({action:'create'});await enter();})}>开始游客体验</button>:null}<a className="unified-login-link" href="/_fribench/auth/login?return_to=%2F">登录 / 注册 Fribench 账号</a></>:<>
       <p>已登录同一账号，不需要家庭登录密码。通过邀请加入家庭后，成员共享该厨房，不会看到其他家庭数据。</p>
@@ -19,7 +19,8 @@ export function UnifiedKitchenAccess({onEnter,inKitchen=false}:{onEnter?:()=>Pro
       {preview?<div role="group" aria-label="确认认领游客厨房"><p>认领“{preview.name}”（版本 {preview.version}）的已同步菜谱、冰箱、采购和历史。确认后归当前账号，每服务仅有一次机会；已有账号厨房不会被覆盖。</p><button disabled={busy} className="primary-action" onClick={()=>void run(async()=>{await accountAction({action:'claim',previewToken:preview.previewToken,confirm:true});await enter();})}>确认认领，仅此一次</button><button disabled={busy} onClick={()=>setPreview(null)}>取消，不扣次数</button></div>:null}
       <label>家人给我的邀请口令<input autoComplete="off" value={invite} maxLength={43} onChange={event=>setInvite(event.target.value)} /></label><button disabled={busy||!invite} onClick={()=>void run(async()=>{await accountAction({action:'join',invite});await enter();})}>通过邀请加入家庭</button>
       {account.selected?.role==='owner'?<><button disabled={busy} onClick={()=>void run(async()=>{const result=await accountAction<{token:string}>({action:'invite'});setGenerated(result.token);})}>生成家人邀请口令</button>{generated?<label>7天有效，最多加入10位家人，请仅发送给信任的人<input readOnly value={generated} onFocus={event=>event.currentTarget.select()} /></label>:null}</>:null}
-      <p>账号退出、昵称、头像等在右上角统一账号面板管理。</p>
+      <div className="kitchen-account-actions"><a href="/_fribench/auth/manage?return_to=%2F" data-fribench-action="manage">个人资料与安全 →</a><button type="button" data-fribench-action="logout">退出此浏览器的账号</button></div>
+      <p data-account-status role="status">昵称、头像、密码与设备授权在账号中心管理。退出不删除家庭数据。</p>
     </>}
     {error?<p className="form-error" role="alert">{error}</p>:null}
   </section>;

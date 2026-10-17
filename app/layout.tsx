@@ -54,6 +54,7 @@ export default function RootLayout({
     <html lang="zh-CN">
       <body>
         <Script src="/_fribench/client.js" strategy="afterInteractive" />
+        <Script src="/_fribench/account-view.js" strategy="afterInteractive" />
         {children}
         <footer className="filing-footer">
           <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">
