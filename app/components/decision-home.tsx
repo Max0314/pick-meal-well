@@ -42,7 +42,7 @@ export function DecisionHome(props: Props) {
         <button className={props.mealType === "dinner" ? "active" : ""} onClick={() => props.onMealType("dinner")}>晚餐</button>
       </div>
       <p className="decision-kicker">下一顿 · {props.mealType === "breakfast" ? "早餐" : props.mealType === "lunch" ? "午餐" : "晚餐"}</p>
-      <h1 id="decision-title">{props.mealType === "breakfast" ? "早上，就吃这个吧。" : props.mealType === "lunch" ? "中午，就吃这个吧。" : "今晚，就吃这个吧。"}</h1>
+      <h1 id="decision-title">{props.mealType === "breakfast" ? "早餐推荐" : props.mealType === "lunch" ? "午餐推荐" : "晚餐推荐"}</h1>
 
       <div className="decision-filters">
         <label><span className="sr-only">用餐人数</span><select value={props.people} onChange={(event) => props.onPeople(Number(event.target.value))}><option value={1}>1 人份</option><option value={2}>2 人份</option><option value={3}>3 人份</option><option value={4}>4 人份</option></select></label>
@@ -53,19 +53,19 @@ export function DecisionHome(props: Props) {
       <article className="recommendation-card" aria-live="polite" aria-busy={props.busy}>
         {dish && props.recommendation ? (
           <>
-            <div className="recommendation-topline"><span>最佳推荐 / {availabilityLabel(props.recommendation.availability)}</span><span>库存 {Math.round(props.recommendation.inventoryCoverage * 100)}%</span></div>
+            <div className="recommendation-topline"><span>本次推荐 / {availabilityLabel(props.recommendation.availability)}</span><span>库存 {Math.round(props.recommendation.inventoryCoverage * 100)}%</span></div>
             <h2>{dish.name}</h2>
             <div className="recommendation-metrics"><span>{dish.cookingTime} 分钟</span><span>约 ¥{props.recommendation.estimatedCost.toFixed(1)}</span><span>{props.recommendation.missingIngredients.length ? `缺 ${props.recommendation.missingIngredients.length} 样` : "无需采购"}</span></div>
             <p>{props.recommendation.reason}</p>
-            {props.accepted ? <div className="accepted-state">这顿计划已定，开火吧。</div> : <button className="primary-action" disabled={props.busy} onClick={props.onAccept}>就吃这个</button>}
+            {props.accepted ? <div className="accepted-state">已加入用餐计划。</div> : <button className="primary-action" disabled={props.busy} onClick={props.onAccept}>就吃这个</button>}
             <div className="secondary-actions"><button disabled={props.busy} onClick={props.onSwap}>换一个</button><button disabled={props.busy} onClick={props.onDislike}>不想吃这类</button></div>
           </>
         ) : (
-          <div className="empty-recommendation"><h2>{props.busy ? "正在挑一顿最合适的" : "暂时没有合适的菜"}</h2><p>{props.busy ? "会优先处理快过期食材。" : "试试放宽时间，或先添加一道家庭菜谱。"}</p></div>
+          <div className="empty-recommendation"><h2>{props.busy ? "正在生成推荐" : "暂时没有合适的菜"}</h2><p>{props.busy ? "会优先处理快过期食材。" : "试试放宽时间，或先添加一道家庭菜谱。"}</p></div>
         )}
       </article>
 
-      <div className="expiry-strip"><div className="section-heading"><span>顺手救下冰箱里的菜</span><span>FRIDGE / {String(expiring.length).padStart(2, "0")}</span></div><div className="expiry-grid">{expiring.map((item) => <div className="expiry-item" key={item.id}><strong>{item.name}</strong><span>{formatExpiry(item.expireAt)}</span></div>)}</div></div>
+      <div className="expiry-strip"><div className="section-heading"><span>临期食材</span><span>FRIDGE / {String(expiring.length).padStart(2, "0")}</span></div><div className="expiry-grid">{expiring.map((item) => <div className="expiry-item" key={item.id}><strong>{item.name}</strong><span>{formatExpiry(item.expireAt)}</span></div>)}</div></div>
     </section>
   );
 }
