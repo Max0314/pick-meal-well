@@ -173,7 +173,7 @@ async function desktopFlow(browser) {
   await page.getByRole("button", { name: "早餐" }).click();
   await page.getByLabel("用餐人数").selectOption("4");
   await page.getByRole("button", { name: "就吃这个" }).click();
-  await page.getByText("这顿计划已定，开火吧。").waitFor();
+  await page.getByText("已加入用餐计划。").waitFor();
   assert.equal(api.mutations.at(-1)?.type, "meal.accept");
   assert.equal(api.mutations.at(-1)?.payload.people, 4);
 
