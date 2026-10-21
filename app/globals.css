@@ -854,3 +854,8 @@ button:disabled {
 .legacy-family { margin-top:22px; }
 .legacy-family .auth-shell { padding:12px; min-height:0; }
 @media(max-width:600px){input,select,textarea{font-size:16px!important;}}
+
+/* Fribench: native scroll boundaries; keep nested gesture owners independent. */
+:root .filter-row {
+  overscroll-behavior-x: none;
+}
